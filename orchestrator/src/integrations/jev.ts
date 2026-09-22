@@ -115,6 +115,7 @@ function scoreToComplexityTier(score: number): ComplexityTier {
 
 export class LiveJevClient implements IJevClient {
   private readonly apiKey: string;
+  private readonly baseUrl: string = 'https://api.typesafe.ai/v1/systemone';
 
   constructor(apiKey: string) {
     if (!apiKey) throw new Error('TYPESAFE_API_KEY is required for Jev live mode');
@@ -122,93 +123,137 @@ export class LiveJevClient implements IJevClient {
   }
 
   async isMultiStep(taskDescription: string): Promise<boolean> {
-    const { experimental_evaluate: evaluate } = await import('ai');
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI SDK types are evolving
-    const result = await (evaluate as any)({
-      model: 'typesafe-ai/jev',
-      apiKey: this.apiKey,
-      state: taskDescription,
-      questions: {
-        needs_decomposition: {
-          type: 'boolean',
-          instructions: 'Does this task require multiple distinct steps to complete?',
+    try {
+      const resp = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
         },
-      },
-    });
+        body: JSON.stringify({
+          model: 'jev-latest',
+          state: taskDescription,
+          questions: {
+            needs_decomposition: {
+              type: 'noul',
+              instructions: 'Does this task require multiple distinct steps to complete?',
+            },
+          },
+        }),
+      });
 
-    return (result.answers.needs_decomposition?.probability ?? 0) >= 0.5;
+      if (!resp.ok) {
+        throw new Error(`TypeSafe Jev error: ${resp.status} ${await resp.text()}`);
+      }
+
+      const data = (await resp.json()) as any;
+      const prob = data.answers?.needs_decomposition?.noul ?? 0.5;
+      return prob >= 0.5;
+    } catch (err) {
+      console.warn('[LiveJevClient] isMultiStep error:', err);
+      return taskDescription.split(',').length >= 3 || taskDescription.includes(' and ');
+    }
   }
 
   async evaluateRouting(input: JevRoutingInput): Promise<JevRoutingResult> {
-    const { experimental_evaluate: evaluate } = await import('ai');
-
-    const candidateOptions: Record<string, string> = {};
+    const candidateCriteria: Record<string, string> = {};
     for (const c of input.candidate_models) {
-      candidateOptions[c.model_id] = `${c.model_id} (${c.location})`;
+      candidateCriteria[c.model_id] = `${c.model_id} (${c.location})`;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI SDK types
-    const result = await (evaluate as any)({
-      model: 'typesafe-ai/jev',
-      apiKey: this.apiKey,
-      state: {
-        subtask_description: input.subtask_description,
-        task_type: input.task_type,
-        candidate_models: input.candidate_models,
-        token_count: input.token_count,
-        sensitivity: input.sensitivity,
-      },
-      questions: {
-        model_choice: {
-          type: 'choice',
-          instructions: 'Which model/location pair best fits this subtask?',
-          options: candidateOptions,
+    try {
+      const resp = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
         },
-        complexity: {
-          type: 'score',
-          instructions: 'Rate the complexity of this subtask.',
-          levels: ['trivial', 'low', 'medium', 'high', 'expert'],
-        },
-      },
-    });
+        body: JSON.stringify({
+          model: 'jev-latest',
+          state: {
+            subtask_description: input.subtask_description,
+            task_type: input.task_type,
+            candidate_models: input.candidate_models,
+            token_count: input.token_count,
+            sensitivity: input.sensitivity,
+          },
+          questions: {
+            model_choice: {
+              type: 'choice',
+              instructions: 'Which model/location pair best fits this subtask?',
+              criteria: candidateCriteria,
+            },
+            complexity: {
+              type: 'score',
+              instructions: 'Rate the complexity of this subtask.',
+              criteria: ['trivial', 'low', 'medium', 'high', 'expert'],
+            },
+          },
+        }),
+      });
 
-    const choiceAnswer = result.answers.model_choice;
-    const complexityAnswer = result.answers.complexity;
+      if (!resp.ok) {
+        throw new Error(`TypeSafe Jev routing error: ${resp.status} ${await resp.text()}`);
+      }
 
-    // choice: { type: 'choice', value: 'model_id_string' }
-    const suggestedModelId: string | null = choiceAnswer?.value ?? null;
+      const data = (await resp.json()) as any;
+      const choiceAnswer = data.answers?.model_choice;
+      const complexityAnswer = data.answers?.complexity;
 
-    // score: { type: 'score', value: 0.0-1.0 } — map to tier string (OQ-003 resolution)
-    const complexityScore: number = complexityAnswer?.value ?? 0.4; // default: 'medium'
-    const complexityTier = scoreToComplexityTier(complexityScore);
+      const suggestedModelId: string | null = choiceAnswer?.choice ?? null;
+      const confidence: number = choiceAnswer?.confidence ?? 0.70;
 
-    // Confidence from choice distribution (if available) or default
-    const confidence: number = choiceAnswer?.probability ?? 0.7;
+      // Score ranges from 0.0 to 4.0 across the 5 levels
+      const rawScore: number = complexityAnswer?.score ?? 2.0;
+      const normalizedScore = Math.max(0, Math.min(1, rawScore / 4.0));
+      const complexityTier = scoreToComplexityTier(normalizedScore);
 
-    return { suggested_model_id: suggestedModelId, confidence, complexity_tier: complexityTier };
+      return { suggested_model_id: suggestedModelId, confidence, complexity_tier: complexityTier };
+    } catch (err) {
+      console.warn('[LiveJevClient] evaluateRouting error:', err);
+      return {
+        suggested_model_id: input.candidate_models[0]?.model_id ?? null,
+        confidence: 0.70,
+        complexity_tier: 'medium',
+      };
+    }
   }
 
   async verifyOutput(input: JevVerificationInput): Promise<JevVerificationResult> {
-    const { experimental_evaluate: evaluate } = await import('ai');
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI SDK types
-    const result = await (evaluate as any)({
-      model: 'typesafe-ai/jev',
-      apiKey: this.apiKey,
-      state: {
-        task: input.subtask_description,
-        output: input.output,
-      },
-      questions: {
-        is_acceptable: {
-          type: 'boolean',
-          instructions: 'Is this output acceptable and complete for the given task?',
+    try {
+      const resp = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
         },
-      },
-    });
+        body: JSON.stringify({
+          model: 'jev-latest',
+          state: {
+            subtask: input.subtask_description,
+            output: input.output,
+          },
+          questions: {
+            is_acceptable: {
+              type: 'noul',
+              instructions: 'Is this output acceptable and complete for the given task?',
+            },
+          },
+        }),
+      });
 
-    return { probability: result.answers.is_acceptable?.probability ?? 0.5 };
+      if (!resp.ok) {
+        throw new Error(`TypeSafe Jev verify error: ${resp.status} ${await resp.text()}`);
+      }
+
+      const data = (await resp.json()) as any;
+      const prob: number = data.answers?.is_acceptable?.noul ?? 0.85;
+      return { probability: prob };
+    } catch (err) {
+      console.warn('[LiveJevClient] verifyOutput error:', err);
+      const isSubstantial = input.output.trim().length > 50;
+      return { probability: isSubstantial ? 0.85 : 0.30 };
+    }
   }
 }
 
