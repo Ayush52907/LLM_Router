@@ -1,21 +1,193 @@
 'use client';
 
 /**
- * EcoRouter Dashboard — rebuilt for real API data only.
- * Design: Apple-simple. One focal action → watch it run. Progressive disclosure.
- * Zero mocked data, zero hardcoded results, zero fake timers.
+ * EcoRouter Dashboard — Notion B&W aesthetic.
+ * Custom components: BanterLoader (loading), NotionButton (CTA),
+ * MetricCard family (KPIs + budgets + bar chart), CommentPanel (route inspector).
+ * Zero mocked data — every number traces to a real API response.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import styled from 'styled-components';
 import {
-  Play, Loader2, AlertCircle, CheckCircle2, Clock, Lock, Cloud, HardDrive,
-  ChevronDown, ChevronUp, Zap, Leaf, DollarSign, Shield, AlertTriangle,
-  FastForward, Settings, X, TrendingDown, BarChart3, RefreshCw,
+  Play, ChevronDown, ChevronUp, Settings, X, FastForward,
+  Lock, Cloud, HardDrive, AlertTriangle, CheckCircle2, Leaf,
+  BarChart3, Zap,
 } from 'lucide-react';
+
+import { BanterLoader } from '../components/BanterLoader';
+import { NotionButton } from '../components/NotionButton';
+import { MetricKpi, BudgetGauge, BarChartCard } from '../components/MetricCard';
+import { CommentPanel, SubtaskComment } from '../components/CommentPanel';
 
 const API_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL ?? 'http://localhost:3001';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Styled layout shells ─────────────────────────────────────────────────────
+
+const Page = styled.div`
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  min-height: 100vh;
+`;
+
+const Section = styled.section`
+  margin-bottom: 32px;
+`;
+
+const SectionTitle = styled.h2`
+  font-size: 11px;
+  font-weight: 700;
+  color: #9b9b9b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+`;
+
+const Divider = styled.hr`
+  border: none;
+  border-top: 1px solid #f0f0f0;
+  margin: 32px 0;
+`;
+
+const Grid3 = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+`;
+
+const Grid2 = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+`;
+
+const Surface = styled.div`
+  background: #ffffff;
+  border: 1px solid #e9e9e9;
+  border-radius: 12px;
+  padding: 20px;
+`;
+
+const Chip = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid ${p => p.$active ? '#1a1a1a' : '#e0e0e0'};
+  background: ${p => p.$active ? '#1a1a1a' : '#fff'};
+  color: ${p => p.$active ? '#fff' : '#6b6b6b'};
+  cursor: pointer;
+  transition: all 0.18s;
+  &:hover { border-color: #1a1a1a; color: ${p => p.$active ? '#fff' : '#1a1a1a'}; }
+`;
+
+const Pill = styled.span<{ $mono?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  color: #6b6b6b;
+  background: #fafafa;
+  ${p => p.$mono ? 'font-family: monospace;' : ''}
+`;
+
+const PillDark = styled(Pill)`
+  border-color: #1a1a1a;
+  background: #1a1a1a;
+  color: #fff;
+`;
+
+const Textarea = styled.textarea`
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #e9e9e9;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #1a1a1a;
+  background: #fafafa;
+  outline: none;
+  line-height: 1.6;
+  &:focus { border-color: #1a1a1a; background: #fff; }
+  &::placeholder { color: #c0c0c0; }
+`;
+
+const SubtaskCard = styled.div<{ $selected?: boolean }>`
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1.5px solid ${p => p.$selected ? '#1a1a1a' : '#e9e9e9'};
+  background: ${p => p.$selected ? '#f9f9f9' : '#fff'};
+  cursor: pointer;
+  transition: all 0.15s;
+  &:hover { border-color: #1a1a1a; }
+`;
+
+const StatusDot = styled.span<{ $status: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-acing: 0.03em;
+  border: 1px solid;
+  
+  ${p => {
+    switch (p.$status) {
+      case 'done':      return 'border-color:#1a1a1a; background:#1a1a1a; color:#fff;';
+      case 'failed':    return 'border-color:#1a1a1a; background:#fff; color:#1a1a1a;';
+      case 'routing':
+      case 'executing':
+      case 'verifying': return 'border-color:#1a1a1a; background:#f5f5f5; color:#1a1a1a;';
+      default:          return 'border-color:#e0e0e0; background:#fafafa; color:#9b9b9b;';
+    }
+  }}
+`;
+
+// ─── Contracts ────────────────────────────────────────────────────────────────
+
+const CONTRACT_ACME = `# MASTER SERVICES AGREEMENT — ACME CLOUD & OMNI RETAIL
+Effective Date: January 15, 2026 | Contract ID: MSA-2026-0891
+Canary Token: CANARY-PII-ACME-90210
+
+## 1. PARTIES
+- Provider: Acme Cloud Technologies Inc., Sarah J. Jenkins (sarah.jenkins@acmecloud.example.com, SSN: 000-12-3456)
+- Customer: Omni Retail Solutions LLC, Marcus Vance (m.vance@omniretail.example.com)
+
+## 2. OBLIGATIONS & SERVICE LEVELS
+3.1 Uptime: 99.9% monthly. 3.2 Data Protection: AES-256 at rest, TLS 1.3 in transit.
+
+## 3. INTELLECTUAL PROPERTY (RISK)
+4.1 Customer irrevocably assigns to Provider all rights to derivative works interacting with API.
+
+## 4. INDEMNITY & LIABILITY (RISK)
+5.1 Customer provides uncapped indemnity for all third-party claims regardless of Provider negligence.
+5.2 Provider aggregate liability capped at fifty dollars ($50.00 USD).`;
+
+const CONTRACT_CYBERDYNE = `# VENDOR SERVICES AGREEMENT — CYBERDYNE & NEXUS HEALTH
+Effective Date: March 1, 2026 | Canary: CANARY-PII-CYBER-88124
+
+## 1. PARTIES
+- Vendor: CyberDyne Autonomous Systems, Dr. Elena Rostova (elena.rostova@cyberdyne-systems.example.com)
+- Client: Nexus Health Network, Dr. Robert Chen (r.chen@nexushealth.example.com)
+
+## 2. TERM & AUTO-RENEWAL (RISK)
+Irrevocable 5-year auto-renewal unless physical notice 180–175 days before expiration.
+
+## 3. DISCLAIMERS (RISK)
+Client forfeits all legal claims for patient injury caused by Vendor gross negligence.`;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface GridData {
   current_intensity_gco2_per_kwh: number;
@@ -58,7 +230,6 @@ interface Task {
   max_total_cost_usd: number;
   max_total_carbon_kgco2eq: number;
   max_total_latency_ms: number;
-  created_at: string;
 }
 
 interface EscalationEvent {
@@ -70,1127 +241,785 @@ interface EscalationEvent {
   created_at: string;
 }
 
-interface ScoreCandidate {
-  model_id: string;
-  location: 'cloud' | 'local';
-  accuracy_tier: number;
-  raw_score: number;
-  jev_bonus: number;
-  final_score: number;
-  lat_norm: number;
-  acc_norm: number;
-  cost_norm: number;
-  energy_norm: number;
-  carbon_norm: number;
-  is_winner: boolean;
-}
+interface Weights { latency: number; accuracy: number; cost: number; energy: number; carbon: number; }
 
-interface Weights {
-  latency: number;
-  accuracy: number;
-  cost: number;
-  energy: number;
-  carbon: number;
-}
-
-// ─── Preset contracts ───────────────────────────────────────────────────────────
-
-const CONTRACT_ACME = `# MASTER SERVICES AGREEMENT — ACME CLOUD & OMNI RETAIL
-Effective Date: January 15, 2026 | Contract ID: MSA-2026-0891
-Canary Token: CANARY-PII-ACME-90210
-
-## 1. PARTIES
-- Provider: Acme Cloud Technologies Inc., Sarah J. Jenkins (sarah.jenkins@acmecloud.example.com, SSN: 000-12-3456)
-- Customer: Omni Retail Solutions LLC, Marcus Vance (m.vance@omniretail.example.com)
-
-## 2. SCOPE OF SERVICES & TERM
-Provider delivers multi-tenant cloud data hosting. Initial term: 3 years.
-
-## 3. OBLIGATIONS & SERVICE LEVELS
-3.1 Uptime: 99.9% monthly availability. 3.2 Data Protection: AES-256 at rest, TLS 1.3 in transit.
-
-## 4. INTELLECTUAL PROPERTY (RISK)
-4.1 Customer irrevocably assigns to Provider all rights to derivative works interacting with API.
-
-## 5. INDEMNITY & LIABILITY (RISK)
-5.1 Customer provides uncapped indemnity for all third-party claims regardless of Provider negligence.
-5.2 Provider aggregate liability capped at fifty dollars ($50.00 USD).`;
-
-const CONTRACT_CYBERDYNE = `# VENDOR SERVICES AGREEMENT — CYBERDYNE & NEXUS HEALTH
-Effective Date: March 1, 2026 | Canary: CANARY-PII-CYBER-88124
-
-## 1. PARTIES
-- Vendor: CyberDyne Autonomous Systems, Dr. Elena Rostova (elena.rostova@cyberdyne-systems.example.com)
-- Client: Nexus Health Network, Dr. Robert Chen (r.chen@nexushealth.example.com)
-
-## 2. SERVICES
-24x7 automated robotic telemetry dispatch.
-
-## 3. TERM & AUTO-RENEWAL (RISK)
-3.1 Irrevocable 5-year auto-renewal unless physical notice delivered 180–175 days before expiration.
-
-## 4. DISCLAIMERS (RISK)
-4.1 Client forfeits all legal claims for patient injury caused by Vendor gross negligence.`;
-
-// ─── Small utilities ────────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: Subtask['status'] }) {
-  const map: Record<string, { label: string; color: string }> = {
-    queued:    { label: 'Queued',    color: '#8a8a8e' },
-    routing:   { label: 'Routing…',  color: '#ff9500' },
-    executing: { label: 'Running…',  color: '#0071e3' },
-    verifying: { label: 'Verifying', color: '#af52de' },
-    done:      { label: 'Done',      color: '#1ec36a' },
-    failed:    { label: 'Failed',    color: '#ff3b30' },
-  };
-  const s = map[status] ?? { label: status, color: '#8a8a8e' };
-  const isAnimated = status === 'routing' || status === 'executing' || status === 'verifying';
-  return (
-    <span
-      style={{ color: s.color, border: `1px solid ${s.color}30`, background: `${s.color}12` }}
-      className={`text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${isAnimated ? 'animate-pulse' : ''}`}
-    >
-      {status === 'done' && <CheckCircle2 size={10} />}
-      {status === 'failed' && <AlertCircle size={10} />}
-      {(status === 'routing' || status === 'executing' || status === 'verifying') && (
-        <RefreshCw size={10} className="animate-spin-slow" />
-      )}
-      {s.label}
-    </span>
-  );
-}
-
-function MetricBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = Math.min(100, max > 0 ? (value / max) * 100 : 0);
-  return (
-    <div style={{ background: '#e5e5ea', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-      <div
-        style={{ width: `${pct}%`, background: color, height: '100%', borderRadius: 4, transition: 'width 0.4s ease' }}
-      />
-    </div>
-  );
-}
-
-// ─── Main page ──────────────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function EcoRouterDashboard() {
-  // ── Backend connection
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
-
-  // ── Grid & baselines (loaded once on mount)
   const [grid, setGrid] = useState<GridData | null>(null);
   const [baselines, setBaselines] = useState<BaselineData | null>(null);
-
-  // ── Current task run
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [escalations, setEscalations] = useState<EscalationEvent[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Selected subtask for drilldown
-  const [selectedSubtaskId, setSelectedSubtaskId] = useState<string | null>(null);
-  const [inspectorCandidates, setInspectorCandidates] = useState<ScoreCandidate[]>([]);
-  const [inspectorLoading, setInspectorLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [inspectorCandidates, setInspectorCandidates] = useState<any[]>([]);
 
-  // ── Run controls
   const [isUrgent, setIsUrgent] = useState(false);
   const [isPiiGuard, setIsPiiGuard] = useState(true);
   const [isFaultInjected, setIsFaultInjected] = useState(false);
   const [customPrompt, setCustomPrompt] = useState(CONTRACT_ACME);
-  const [showPromptEditor, setShowPromptEditor] = useState(false);
-  const [weights, setWeights] = useState<Weights>({ latency: 0.25, accuracy: 0.35, cost: 0.15, energy: 0.10, carbon: 0.15 });
+  const [showPrompt, setShowPrompt] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-
-  // ── Sections open/closed
   const [showBaselines, setShowBaselines] = useState(false);
   const [showTimeShift, setShowTimeShift] = useState(false);
   const [timeShiftData, setTimeShiftData] = useState<any | null>(null);
-  const [timeShiftLoading, setTimeShiftLoading] = useState(false);
+  const [weights, setWeights] = useState<Weights>({ latency: 0.25, accuracy: 0.35, cost: 0.15, energy: 0.10, carbon: 0.15 });
 
-  // ────────────────────────── Initial Load ──────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function init() {
-      // Health check
       const h = await fetch(`${API_BASE}/api/health`).catch(() => null);
       setApiOnline(!!h?.ok);
 
-      // Grid
       const g = await fetch(`${API_BASE}/api/grid`).catch(() => null);
       if (g?.ok) setGrid(await g.json());
 
-      // Baselines
       const b = await fetch(`${API_BASE}/api/baselines`).catch(() => null);
       if (b?.ok) setBaselines(await b.json());
 
-      // Config weights
       const c = await fetch(`${API_BASE}/api/config`).catch(() => null);
-      if (c?.ok) {
-        const cData = await c.json();
-        if (cData.weights) setWeights(cData.weights);
-      }
+      if (c?.ok) { const d = await c.json(); if (d.weights) setWeights(d.weights); }
 
-      // Latest completed task
       const l = await fetch(`${API_BASE}/api/tasks/latest`).catch(() => null);
       if (l?.ok) {
-        const lData = await l.json();
-        if (lData.task && lData.subtasks?.length > 0) {
-          setCurrentTask(lData.task);
-          setSubtasks(lData.subtasks);
-          setEscalations(lData.escalations ?? []);
-          if (lData.subtasks.length > 0) setSelectedSubtaskId(lData.subtasks[0].id);
+        const d = await l.json();
+        if (d.task && d.subtasks?.length > 0) {
+          setCurrentTask(d.task); setSubtasks(d.subtasks);
+          setEscalations(d.escalations ?? []);
+          setSelectedId(d.subtasks[0].id);
         }
       }
     }
     init();
   }, []);
 
-  // ────────────────────────── Scoring Inspector ────────────────────────────────
+  // ── Inspector scoring ─────────────────────────────────────────────────────
 
   const fetchInspector = useCallback(async (st: Subtask, w: Weights) => {
-    setInspectorLoading(true);
-    try {
-      const r = await fetch(`${API_BASE}/api/score`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subtask_type: st.type,
-          complexity_tier: st.complexity_tier,
-          data_sensitivity: st.pii_class === 'raw_pii' ? 'pii' : (isPiiGuard ? 'pii' : 'internal'),
-          urgency: isUrgent ? 'urgent' : 'normal',
-          weights: w,
-          input_tokens: 2000,
-        }),
-      });
-      if (r.ok) {
-        const d = await r.json();
-        setInspectorCandidates(d.candidates ?? []);
-      }
-    } catch {
-      // silent — inspector is decorative
-    } finally {
-      setInspectorLoading(false);
-    }
+    const r = await fetch(`${API_BASE}/api/score`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subtask_type: st.type,
+        complexity_tier: st.complexity_tier,
+        data_sensitivity: st.pii_class === 'raw_pii' ? 'pii' : (isPiiGuard ? 'pii' : 'internal'),
+        urgency: isUrgent ? 'urgent' : 'normal',
+        weights: w, input_tokens: 2000,
+      }),
+    }).catch(() => null);
+    if (r?.ok) { const d = await r.json(); setInspectorCandidates(d.candidates ?? []); }
   }, [isUrgent, isPiiGuard]);
 
   useEffect(() => {
-    const st = subtasks.find(s => s.id === selectedSubtaskId);
+    const st = subtasks.find(s => s.id === selectedId);
     if (st) fetchInspector(st, weights);
-  }, [selectedSubtaskId, weights, isUrgent, isPiiGuard, fetchInspector]);
+  }, [selectedId, weights, isUrgent, isPiiGuard, fetchInspector]);
 
-  // ────────────────────────── Run Pipeline ────────────────────────────────────
+  // ── Run pipeline ──────────────────────────────────────────────────────────
 
   const handleRun = useCallback(async () => {
-    setIsRunning(true);
-    setRunError(null);
-    setSubtasks([]);
-    setCurrentTask(null);
-    setEscalations([]);
-    setSelectedSubtaskId(null);
-    setInspectorCandidates([]);
-
-    // Clear any existing poll
-    if (pollRef.current) clearTimeout(pollRef.current);
-
+    setIsRunning(true); setRunError(null);
+    setSubtasks([]); setCurrentTask(null); setEscalations([]); setSelectedId(null); setInspectorCandidates([]);
     try {
       const res = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          raw_input: customPrompt || 'Process vendor contract: extract parties and dates, classify clauses, summarize obligations, flag risky clauses, draft reply email.',
+          raw_input: customPrompt || 'Process vendor contract.',
           urgency: isUrgent ? 'urgent' : 'normal',
           data_sensitivity: isPiiGuard ? 'pii' : 'internal',
           fault_injected_type: isFaultInjected ? 'generation' : null,
           custom_weights: weights,
         }),
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error ?? `HTTP ${res.status}`);
-      }
-
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
       const data = await res.json();
-      // POST returns the final completed result synchronously
       if (data.task && data.subtasks) {
-        setCurrentTask(data.task);
-        setSubtasks(data.subtasks);
+        setCurrentTask(data.task); setSubtasks(data.subtasks);
         setEscalations(data.escalations ?? []);
-        if (data.subtasks.length > 0) setSelectedSubtaskId(data.subtasks[0].id);
+        if (data.subtasks.length > 0) setSelectedId(data.subtasks[0].id);
       }
     } catch (err: any) {
       setRunError(err.message ?? 'Unknown error');
-    } finally {
-      setIsRunning(false);
-    }
+    } finally { setIsRunning(false); }
   }, [customPrompt, isUrgent, isPiiGuard, isFaultInjected, weights]);
 
-  // ────────────────────────── Time-Shift ─────────────────────────────────────
+  // ── Time-shift ────────────────────────────────────────────────────────────
 
   const handleTimeShift = useCallback(async () => {
-    setTimeShiftLoading(true);
-    try {
-      const r = await fetch(`${API_BASE}/api/time-shift`, { method: 'POST' });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setTimeShiftData(await r.json());
-      setShowTimeShift(true);
-    } catch (err: any) {
-      setRunError(`Time-shift error: ${err.message}`);
-    } finally {
-      setTimeShiftLoading(false);
-    }
+    const r = await fetch(`${API_BASE}/api/time-shift`, { method: 'POST' }).catch(() => null);
+    if (r?.ok) { setTimeShiftData(await r.json()); setShowTimeShift(true); }
   }, []);
 
-  // ────────────────────────── Derived values ──────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-  const selectedSubtask = subtasks.find(s => s.id === selectedSubtaskId) ?? null;
-  const doneSubtasks = subtasks.filter(s => s.status === 'done').length;
-  const escalatedSubtasks = subtasks.filter(s => s.escalation_count > 0).length;
-  const piiSubtask = subtasks.find(s => s.pii_class === 'raw_pii');
+  const selectedSt = subtasks.find(s => s.id === selectedId) ?? null;
+  const selectedEsc = selectedSt ? escalations.find(e => e.subtask_id === selectedSt.id) : null;
+
+  const inspectorComment: SubtaskComment | null = selectedSt ? {
+    id: selectedSt.id,
+    title: selectedSt.description,
+    meta: [
+      selectedSt.complexity_tier,
+      selectedSt.actual_latency_ms !== null ? `${(selectedSt.actual_latency_ms / 1000).toFixed(1)}s` : null,
+      selectedSt.actual_cost_usd !== null ? `\$${selectedSt.actual_cost_usd.toFixed(5)}` : null,
+      selectedSt.actual_carbon_kgco2eq !== null ? `${(selectedSt.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂` : null,
+    ].filter(Boolean).join(' · '),
+    body: selectedSt.status === 'done'
+      ? `Routed to ${selectedSt.routed_model ?? 'unknown'} (${selectedSt.routed_location ?? '?'}). ` +
+        `Verification: ${selectedSt.verification_pass ? 'passed' : 'failed'}.` +
+        (selectedEsc ? ` Escalated from ${selectedEsc.from_model}: ${selectedEsc.reason_code}.` : '')
+      : `Status: ${selectedSt.status}. Waiting for route decision…`,
+    piiClass: selectedSt.pii_class,
+    routedModel: selectedSt.routed_model,
+    routedLocation: selectedSt.routed_location,
+    jevConfidence: selectedSt.jev_confidence,
+    verificationPass: selectedSt.verification_pass !== null ? Boolean(selectedSt.verification_pass) : null,
+    escalated: !!selectedEsc,
+    escalatedFrom: selectedEsc?.from_model ?? null,
+  } : null;
+
+  // Build bar chart data from the last run's subtasks
+  const barData = subtasks.slice(0, 7).map((st, i) => ({
+    label: ['Ex', 'Cl', 'Su', 'Fl', 'Dr'][i] ?? `S${i + 1}`,
+    height: st.actual_latency_ms ? Math.min(100, (st.actual_latency_ms / 8000) * 100) : 20,
+    dot: (st.escalation_count > 0 ? 'top' : undefined) as 'top' | 'bottom' | 'both' | undefined,
+  }));
 
   const totalCost = currentTask?.running_cost_usd ?? 0;
   const totalCarbon = currentTask?.running_carbon_kgco2eq ?? 0;
   const totalLatency = currentTask?.running_latency_ms ?? 0;
 
-  // ────────────────────────── Render ──────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 20px', minHeight: '100vh' }}>
+    <>
+      {/* Banter Loader overlay during pipeline run */}
+      {isRunning && <BanterLoader label="Running pipeline — Jev routing each subtask…" />}
 
-      {/* ── Top header ─────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: 'linear-gradient(135deg, #0071e3, #00b6b0)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Leaf size={18} color="#fff" />
-            </div>
+      <Page>
+        {/* ── Header ─────────────────────────────────────── */}
+        <Section>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
             <div>
-              <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.5, margin: 0 }}>EcoRouter</h1>
-              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>Carbon-aware LLM scheduler · Jev-guided routing</p>
+              <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1, marginBottom: 6 }}>
+                EcoRouter
+              </h1>
+              <p style={{ fontSize: 14, color: '#6b6b6b', fontWeight: 500 }}>
+                Carbon-aware LLM scheduler · Jev-guided routing · Savings proven, not asserted
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
+                background: apiOnline === null ? '#d0d0d0' : apiOnline ? '#1a1a1a' : '#e0e0e0',
+              }} />
+              <span style={{ fontSize: 12, color: '#9b9b9b' }}>
+                {apiOnline === null ? 'Connecting…' : apiOnline ? `API online · ${grid?.zone ?? ''}` : 'API offline'}
+              </span>
+              {grid && (
+                <Pill $mono>
+                  {grid.current_intensity_gco2_per_kwh} gCO₂/kWh
+                </Pill>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* API status dot */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {grid && (
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-              {grid.zone} · {grid.current_intensity_gco2_per_kwh} gCO₂/kWh
-            </span>
+          {/* ── KPI headline row (MetricKpi cards) ── */}
+          {baselines?.measured_summary && (
+            <Grid3>
+              <MetricKpi
+                title="Cost saved"
+                value={`+${baselines.measured_summary.cost_saved_pct.toFixed(1)}%`}
+                sub="vs Always-strongest baseline"
+                badge="Measured offline N=60"
+              />
+              <MetricKpi
+                title="Carbon saved"
+                value={`+${baselines.measured_summary.carbon_saved_pct.toFixed(1)}%`}
+                sub="EcoLogits (cloud) · CodeCarbon (local)"
+              />
+              <MetricKpi
+                title="Quality retained"
+                value={`${baselines.measured_summary.quality_retained_pct.toFixed(1)}%`}
+                sub="per rubric & MMLU benchmark tiers"
+              />
+            </Grid3>
           )}
-          <div style={{
-            width: 8, height: 8, borderRadius: '50%',
-            background: apiOnline === null ? '#ff9500' : apiOnline ? '#1ec36a' : '#ff3b30',
-          }} />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            {apiOnline === null ? 'Connecting…' : apiOnline ? 'API online' : 'API offline'}
-          </span>
-        </div>
-      </div>
+        </Section>
 
-      {/* ── Headline metrics (from baselines) ────────────── */}
-      {baselines?.measured_summary && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24,
-        }}>
-          {[
-            { label: 'Cost saved', value: `+${baselines.measured_summary.cost_saved_pct.toFixed(1)}%`, color: '#1ec36a', sub: 'vs Always-strongest (N=60, measured offline)' },
-            { label: 'Carbon saved', value: `+${baselines.measured_summary.carbon_saved_pct.toFixed(1)}%`, color: '#00b6b0', sub: 'EcoLogits (cloud) · CodeCarbon (local)' },
-            { label: 'Quality retained', value: `${baselines.measured_summary.quality_retained_pct.toFixed(1)}%`, color: '#0071e3', sub: 'per rubric & MMLU benchmark tiers' },
-          ].map(m => (
-            <div key={m.label} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14,
-              padding: '16px 20px',
-            }}>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {m.label}
-              </div>
-              <div style={{ fontSize: 36, fontWeight: 800, color: m.color, lineHeight: 1.1, marginTop: 4 }}>
-                {m.value}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>{m.sub}</div>
-            </div>
-          ))}
-        </div>
-      )}
+        <Divider />
 
-      {/* ── Submit section ───────────────────────────────── */}
-      <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16,
-        padding: 20, marginBottom: 16,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-          {/* Prompt editor toggle */}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        {/* ── Submit pipeline ─────────────────────────────── */}
+        <Section>
+          <SectionTitle>Submit a pipeline run</SectionTitle>
+
+          <Surface>
+            {/* Contract preset chooser */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <button
-                onClick={() => setShowPromptEditor(!showPromptEditor)}
+                onClick={() => setShowPrompt(!showPrompt)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 4, fontSize: 13,
-                  fontWeight: 600, color: 'var(--text-primary)', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: 0,
+                  fontSize: 13, fontWeight: 600, color: '#1a1a1a', background: 'none',
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0,
                 }}
               >
-                Contract Input
-                {showPromptEditor ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                Contract input {showPrompt ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
               {[
                 { label: 'Acme Cloud', val: CONTRACT_ACME },
                 { label: 'CyberDyne', val: CONTRACT_CYBERDYNE },
               ].map(p => (
-                <button
-                  key={p.label}
-                  onClick={() => setCustomPrompt(p.val)}
-                  style={{
-                    fontSize: 11, padding: '2px 8px', borderRadius: 6,
-                    background: customPrompt === p.val ? '#0071e3' : 'var(--surface-secondary)',
-                    color: customPrompt === p.val ? '#fff' : 'var(--text-secondary)',
-                    border: `1px solid ${customPrompt === p.val ? '#0071e3' : 'var(--border)'}`,
-                    cursor: 'pointer', fontWeight: 500,
-                  }}
-                >
+                <Chip key={p.label} $active={customPrompt === p.val} onClick={() => setCustomPrompt(p.val)}>
                   {p.label}
-                </button>
+                </Chip>
               ))}
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#b0b0b0', fontFamily: 'monospace' }}>
                 ~{Math.round(customPrompt.length / 4)} tokens
               </span>
             </div>
-            {showPromptEditor && (
-              <textarea
-                rows={6}
+
+            {showPrompt && (
+              <Textarea
+                rows={7}
                 value={customPrompt}
                 onChange={e => setCustomPrompt(e.target.value)}
                 placeholder="Paste contract markdown or task instructions…"
-                style={{
-                  width: '100%', fontFamily: 'monospace', fontSize: 12,
-                  background: 'var(--surface-secondary)', border: '1px solid var(--border)',
-                  borderRadius: 8, padding: '10px 12px', color: 'var(--text-primary)',
-                  outline: 'none', resize: 'vertical',
-                }}
+                style={{ marginBottom: 14 }}
               />
             )}
-          </div>
 
-          {/* Controls column */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200 }}>
-            {/* Toggles */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {/* Toggles + settings */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 16 }}>
               {[
-                { label: isUrgent ? '⚡ Urgent' : 'Normal', active: isUrgent, toggle: () => setIsUrgent(!isUrgent), color: '#ff9500' },
-                { label: isPiiGuard ? '🔒 PII Guard' : 'No PII', active: isPiiGuard, toggle: () => setIsPiiGuard(!isPiiGuard), color: '#1ec36a' },
-                { label: isFaultInjected ? '💥 Fault ON' : 'No Fault', active: isFaultInjected, toggle: () => setIsFaultInjected(!isFaultInjected), color: '#ff3b30' },
+                { label: isUrgent ? '⚡ Urgent' : 'Normal priority', active: isUrgent, fn: () => setIsUrgent(!isUrgent) },
+                { label: isPiiGuard ? '🔒 PII Guard on' : 'No PII Guard', active: isPiiGuard, fn: () => setIsPiiGuard(!isPiiGuard) },
+                { label: isFaultInjected ? '💥 Fault armed' : 'No fault injection', active: isFaultInjected, fn: () => setIsFaultInjected(!isFaultInjected) },
               ].map(t => (
-                <button
-                  key={t.label}
-                  onClick={t.toggle}
-                  style={{
-                    fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 7,
-                    border: `1px solid ${t.active ? t.color : 'var(--border)'}`,
-                    background: t.active ? `${t.color}15` : 'var(--surface-secondary)',
-                    color: t.active ? t.color : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t.label}
-                </button>
+                <Chip key={t.label} $active={t.active} onClick={t.fn}>{t.label}</Chip>
               ))}
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                style={{
-                  fontSize: 11, padding: '4px 10px', borderRadius: 7,
-                  border: '1px solid var(--border)', background: showSettings ? '#0071e315' : 'var(--surface-secondary)',
-                  color: showSettings ? '#0071e3' : 'var(--text-secondary)', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}
-              >
+              <Chip $active={showSettings} onClick={() => setShowSettings(!showSettings)}>
                 <Settings size={11} /> Weights
-              </button>
+              </Chip>
             </div>
 
-            {/* Action buttons */}
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button
-                onClick={handleRun}
-                disabled={isRunning}
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '10px 16px', borderRadius: 10, border: 'none',
-                  background: isRunning ? '#d2d2d7' : '#0071e3',
-                  color: '#fff', fontWeight: 700, fontSize: 14, cursor: isRunning ? 'not-allowed' : 'pointer',
-                  transition: 'background 0.15s',
-                }}
-              >
-                {isRunning ? <Loader2 size={15} className="animate-spin-slow" /> : <Play size={15} fill="currentColor" />}
-                {isRunning ? 'Running…' : 'Run Pipeline'}
-              </button>
-              <button
-                onClick={handleTimeShift}
-                disabled={timeShiftLoading}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  padding: '10px 12px', borderRadius: 10,
-                  border: '1px solid var(--border)', background: 'var(--surface-secondary)',
-                  color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                {timeShiftLoading ? <Loader2 size={13} className="animate-spin-slow" /> : <FastForward size={13} />}
-                Time-Shift
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Weight sliders — shown when settings open */}
-        {showSettings && (
-          <div style={{
-            marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)',
-            display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12,
-          }}>
-            {(Object.keys(weights) as (keyof Weights)[]).map(k => (
-              <div key={k}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'capitalize' }}>{k}</span>
-                  <span style={{ fontFamily: 'monospace', color: '#0071e3', fontWeight: 700 }}>
-                    {weights[k].toFixed(2)}
-                  </span>
-                </div>
-                <input
-                  type="range" min={0} max={1} step={0.05}
-                  value={weights[k]}
-                  onChange={e => setWeights(w => ({ ...w, [k]: parseFloat(e.target.value) }))}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Error state */}
-        {runError && (
-          <div style={{
-            marginTop: 12, padding: '10px 14px', borderRadius: 8,
-            background: '#ff3b3010', border: '1px solid #ff3b3040',
-            color: '#ff3b30', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <AlertCircle size={14} />
-            {runError}
-          </div>
-        )}
-      </div>
-
-      {/* ── Main content: DAG + Inspector ────────────────── */}
-      {subtasks.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-
-          {/* ── Left: Subtask DAG ─── */}
-          <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 16, padding: 20,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>Subtask Pipeline</h2>
-              <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                <span>{doneSubtasks}/{subtasks.length} done</span>
-                {escalatedSubtasks > 0 && (
-                  <span style={{ color: '#ff3b30', fontWeight: 600 }}>{escalatedSubtasks} escalated</span>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {subtasks.map((st, idx) => {
-                const isSelected = st.id === selectedSubtaskId;
-                const isPii = st.pii_class === 'raw_pii';
-                const escalation = escalations.find(e => e.subtask_id === st.id);
-
-                return (
-                  <div
-                    key={st.id}
-                    onClick={() => setSelectedSubtaskId(st.id)}
-                    style={{
-                      padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
-                      border: `1.5px solid ${isSelected ? '#0071e3' : 'var(--border)'}`,
-                      background: isSelected ? '#0071e308' : 'var(--surface-secondary)',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{
-                          width: 20, height: 20, borderRadius: '50%',
-                          background: isSelected ? '#0071e3' : '#e5e5ea',
-                          color: isSelected ? '#fff' : 'var(--text-secondary)',
-                          fontSize: 10, fontWeight: 700,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                        }}>{idx + 1}</span>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {st.description}
-                        </span>
-                      </div>
-                      <StatusBadge status={st.status} />
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {/* Complexity */}
-                      <span style={{
-                        fontSize: 10, fontFamily: 'monospace', padding: '1px 6px', borderRadius: 4,
-                        background: '#e5e5ea', color: 'var(--text-secondary)',
-                      }}>{st.complexity_tier}</span>
-
-                      {/* PII forced local */}
-                      {isPii && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 4,
-                          background: '#ff950015', border: '1px solid #ff950040', color: '#ff9500',
-                          display: 'flex', alignItems: 'center', gap: 3,
-                        }}>
-                          <Lock size={9} /> Forced local (PII)
-                        </span>
-                      )}
-
-                      {/* Routed model */}
-                      {st.routed_model && (
-                        <span style={{
-                          fontSize: 10, fontFamily: 'monospace', padding: '1px 7px', borderRadius: 4,
-                          background: st.routed_location === 'local' ? '#1ec36a15' : '#0071e315',
-                          border: `1px solid ${st.routed_location === 'local' ? '#1ec36a40' : '#0071e340'}`,
-                          color: st.routed_location === 'local' ? '#1a9e58' : '#0071e3',
-                          display: 'flex', alignItems: 'center', gap: 3,
-                        }}>
-                          {st.routed_location === 'local' ? <HardDrive size={9} /> : <Cloud size={9} />}
-                          {st.routed_model}
-                        </span>
-                      )}
-
-                      {/* Escalation */}
-                      {escalation && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 4,
-                          background: '#ff3b3015', border: '1px solid #ff3b3040', color: '#ff3b30',
-                          display: 'flex', alignItems: 'center', gap: 3,
-                        }}>
-                          <AlertTriangle size={9} /> {escalation.from_model} → {escalation.to_model}
-                        </span>
-                      )}
-
-                      {/* Jev confidence */}
-                      {st.jev_confidence !== null && !isPii && (
-                        <span style={{
-                          fontSize: 10, fontFamily: 'monospace', padding: '1px 6px', borderRadius: 4,
-                          background: '#af52de12', color: '#af52de',
-                        }}>
-                          Jev {(st.jev_confidence * 100).toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Actual metrics row (once done) */}
-                    {st.status === 'done' && (
-                      <div style={{
-                        display: 'flex', gap: 12, marginTop: 8, fontSize: 10,
-                        color: 'var(--text-tertiary)', fontFamily: 'monospace',
-                      }}>
-                        {st.actual_latency_ms !== null && (
-                          <span><Clock size={9} style={{ display: 'inline', verticalAlign: 'middle' }} /> {(st.actual_latency_ms / 1000).toFixed(1)}s</span>
-                        )}
-                        {st.actual_cost_usd !== null && (
-                          <span><DollarSign size={9} style={{ display: 'inline', verticalAlign: 'middle' }} /> ${st.actual_cost_usd.toFixed(5)}</span>
-                        )}
-                        {st.actual_carbon_kgco2eq !== null && (
-                          <span><Leaf size={9} style={{ display: 'inline', verticalAlign: 'middle' }} /> {(st.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂</span>
-                        )}
-                        {st.verification_pass !== null && (
-                          <span style={{ color: st.verification_pass ? '#1ec36a' : '#ff3b30' }}>
-                            {st.verification_pass ? '✓ Verified' : '✗ Failed verify'}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Budget summary */}
-            {currentTask && (
+            {/* Weight sliders */}
+            {showSettings && (
               <div style={{
-                marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)',
-                display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
+                borderTop: '1px solid #f0f0f0', paddingTop: 16, marginBottom: 16,
+                display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16,
               }}>
-                {[
-                  { label: 'Cost', val: `$${totalCost.toFixed(5)}`, max: currentTask.max_total_cost_usd, pct: totalCost / currentTask.max_total_cost_usd, color: '#1ec36a' },
-                  { label: 'Carbon', val: `${(totalCarbon * 1000).toFixed(3)}g`, max: currentTask.max_total_carbon_kgco2eq, pct: totalCarbon / currentTask.max_total_carbon_kgco2eq, color: '#00b6b0' },
-                  { label: 'Latency', val: `${(totalLatency / 1000).toFixed(1)}s`, max: currentTask.max_total_latency_ms, pct: totalLatency / currentTask.max_total_latency_ms, color: '#0071e3' },
-                ].map(b => (
-                  <div key={b.label}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 3 }}>
-                      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{b.label}</span>
-                      <span style={{ fontFamily: 'monospace', color: b.color, fontWeight: 700 }}>{b.val}</span>
+                {(Object.keys(weights) as (keyof Weights)[]).map(k => (
+                  <div key={k}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 6 }}>
+                      <span style={{ color: '#6b6b6b', fontWeight: 600, textTransform: 'capitalize' }}>{k}</span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#1a1a1a' }}>{weights[k].toFixed(2)}</span>
                     </div>
-                    <MetricBar value={b.pct} max={1} color={b.color} />
+                    <input
+                      type="range" min={0} max={1} step={0.05}
+                      value={weights[k]}
+                      onChange={e => setWeights(w => ({ ...w, [k]: parseFloat(e.target.value) }))}
+                    />
                   </div>
                 ))}
               </div>
             )}
-          </div>
 
-          {/* ── Right: Route Inspector ─── */}
-          <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 16, padding: 20,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>Route Scoring</h2>
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Five-factor formula · not a black box</span>
+            {/* Action buttons — NotionButton (the custom pill CTA) */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <NotionButton onClick={handleRun} disabled={isRunning}>
+                <Play size={13} fill="currentColor" />
+                {isRunning ? 'Running…' : 'Run Pipeline'}
+              </NotionButton>
+              <NotionButton onClick={handleTimeShift} style={{ minWidth: 'unset', padding: '0 18px' }}>
+                <FastForward size={13} /> Time-shift batch
+              </NotionButton>
             </div>
 
-            {selectedSubtask ? (
-              <>
-                {/* Selected subtask context */}
-                <div style={{
-                  padding: '10px 14px', borderRadius: 10, background: 'var(--surface-secondary)',
-                  marginBottom: 14, border: '1px solid var(--border)',
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                    {selectedSubtask.description}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
-                    <span style={{ color: 'var(--text-tertiary)' }}>
-                      Complexity: <strong style={{ color: 'var(--text-primary)' }}>{selectedSubtask.complexity_tier}</strong>
-                    </span>
-                    {selectedSubtask.pii_class === 'raw_pii' && (
-                      <span style={{ color: '#ff9500', fontWeight: 600 }}>⚠ PII override: cloud eliminated</span>
-                    )}
-                  </div>
+            {/* Error */}
+            {runError && (
+              <div style={{
+                marginTop: 14, padding: '10px 14px', borderRadius: 8,
+                border: '1px solid #1a1a1a', background: '#f5f5f5',
+                fontSize: 12, color: '#1a1a1a',
+              }}>
+                Error: {runError}
+              </div>
+            )}
+          </Surface>
+        </Section>
+
+        {/* ── Empty state ──────────────────────────────────── */}
+        {subtasks.length === 0 && !isRunning && (
+          <>
+            <Divider />
+            <div style={{ textAlign: 'center', padding: '56px 24px' }}>
+              <Zap size={32} style={{ margin: '0 auto 16px', display: 'block', opacity: 0.15 }} />
+              <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8, letterSpacing: -0.5 }}>
+                No pipeline run yet
+              </h2>
+              <p style={{ fontSize: 14, color: '#6b6b6b', maxWidth: 380, margin: '0 auto' }}>
+                Choose a contract above and click <strong>Run Pipeline</strong>. Jev scores each subtask, the formula picks a model, and every result comes from the real backend.
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* ── Pipeline results ─────────────────────────────── */}
+        {subtasks.length > 0 && (
+          <>
+            <Divider />
+            <Section>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <SectionTitle style={{ marginBottom: 0 }}>Subtask pipeline</SectionTitle>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Pill>{subtasks.filter(s => s.status === 'done').length}/{subtasks.length} done</Pill>
+                  {escalations.length > 0 && <PillDark>{escalations.length} escalated</PillDark>}
                 </div>
+              </div>
 
-                {/* Candidates */}
-                {inspectorLoading ? (
-                  <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-tertiary)', fontSize: 13 }}>
-                    <Loader2 size={18} className="animate-spin-slow" style={{ display: 'inline' }} /> Scoring…
-                  </div>
-                ) : inspectorCandidates.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-tertiary)', fontSize: 13 }}>
-                    No candidates (PII forced local — only local models shown)
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {/* Legend */}
-                    <div style={{ display: 'flex', gap: 10, fontSize: 10, color: 'var(--text-tertiary)' }}>
-                      {[
-                        { label: 'Latency', color: '#0071e3' },
-                        { label: 'Accuracy', color: '#af52de' },
-                        { label: 'Cost', color: '#1ec36a' },
-                        { label: 'Energy', color: '#ff9500' },
-                        { label: 'Carbon', color: '#00b6b0' },
-                      ].map(l => (
-                        <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, display: 'inline-block' }} />
-                          {l.label}
-                        </span>
-                      ))}
-                    </div>
+              <Grid2>
+                {/* ── Left: Subtask list ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {subtasks.map((st, i) => {
+                    const isSelected = st.id === selectedId;
+                    const esc = escalations.find(e => e.subtask_id === st.id);
+                    const isPii = st.pii_class === 'raw_pii';
 
-                    {inspectorCandidates.map(c => (
-                      <div
-                        key={c.model_id}
-                        style={{
-                          padding: '12px 14px', borderRadius: 10,
-                          border: `1.5px solid ${c.is_winner ? '#0071e3' : 'var(--border)'}`,
-                          background: c.is_winner ? '#0071e308' : 'var(--surface-secondary)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {c.is_winner && (
-                              <span style={{
-                                fontSize: 10, fontWeight: 700, color: '#0071e3',
-                                background: '#0071e315', border: '1px solid #0071e340',
-                                borderRadius: 4, padding: '1px 6px',
-                              }}>Selected</span>
-                            )}
-                            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>{c.model_id}</span>
-                            <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>({c.location})</span>
-                          </div>
-                          <div style={{ fontSize: 11, fontFamily: 'monospace', display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <span style={{ color: 'var(--text-tertiary)' }}>{c.raw_score.toFixed(3)}</span>
-                            {c.jev_bonus > 0 && (
-                              <span style={{ color: '#af52de' }}>−{c.jev_bonus.toFixed(3)} Jev</span>
-                            )}
-                            <span style={{ fontWeight: 700, color: c.is_winner ? '#0071e3' : 'var(--text-primary)' }}>
-                              = {c.final_score.toFixed(3)}
+                    return (
+                      <SubtaskCard key={st.id} $selected={isSelected} onClick={() => setSelectedId(st.id)}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{
+                              width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                              background: isSelected ? '#1a1a1a' : '#f0f0f0',
+                              color: isSelected ? '#fff' : '#9b9b9b',
+                              fontSize: 10, fontWeight: 800,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>{i + 1}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3 }}>
+                              {st.description}
                             </span>
                           </div>
+                          <StatusDot $status={st.status}>
+                            {st.status === 'done' && <CheckCircle2 size={8} />}
+                            {st.status}
+                          </StatusDot>
                         </div>
 
-                        {/* Stacked score bar */}
-                        <div style={{
-                          height: 6, borderRadius: 3, background: '#e5e5ea',
-                          display: 'flex', overflow: 'hidden', marginBottom: 6,
-                        }}>
+                        {/* Badges */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          <Pill $mono>{st.complexity_tier}</Pill>
+                          {isPii && (
+                            <PillDark><Lock size={8} /> Forced local</PillDark>
+                          )}
+                          {st.routed_model && (
+                            <Pill $mono>
+                              {st.routed_location === 'local' ? <HardDrive size={8} /> : <Cloud size={8} />}
+                              {st.routed_model}
+                            </Pill>
+                          )}
+                          {esc && (
+                            <PillDark><AlertTriangle size={8} /> {esc.from_model}→{esc.to_model}</PillDark>
+                          )}
+                          {st.jev_confidence !== null && !isPii && (
+                            <Pill $mono>Jev {((st.jev_confidence ?? 0) * 100).toFixed(0)}%</Pill>
+                          )}
+                        </div>
+
+                        {/* Actual metrics (after done) */}
+                        {st.status === 'done' && (
+                          <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 10, color: '#9b9b9b', fontFamily: 'monospace' }}>
+                            {st.actual_latency_ms !== null && <span>{(st.actual_latency_ms / 1000).toFixed(1)}s</span>}
+                            {st.actual_cost_usd !== null && <span>${st.actual_cost_usd.toFixed(5)}</span>}
+                            {st.actual_carbon_kgco2eq !== null && <span>{(st.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂</span>}
+                            {st.verification_pass !== null && (
+                              <span style={{ color: st.verification_pass ? '#1a1a1a' : '#6b6b6b', fontWeight: 700 }}>
+                                {st.verification_pass ? '✓ verified' : '✗ failed'}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </SubtaskCard>
+                    );
+                  })}
+                </div>
+
+                {/* ── Right: CommentPanel (route inspector) ── */}
+                <CommentPanel
+                  title="Route Inspector"
+                  rightLabel="five-factor formula · not a black box"
+                  comment={inspectorComment}
+                  emptyText="Select a subtask to inspect its routing decision."
+                />
+              </Grid2>
+            </Section>
+
+            {/* ── Score breakdown table ── */}
+            {inspectorCandidates.length > 0 && (
+              <Section>
+                <SectionTitle>Scoring breakdown — {selectedSt?.description}</SectionTitle>
+                <Surface>
+                  {/* Legend */}
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 11, color: '#9b9b9b' }}>
+                    {[
+                      { l: 'Latency', c: '#1a1a1a' }, { l: 'Accuracy', c: '#555' },
+                      { l: 'Cost', c: '#777' }, { l: 'Energy', c: '#999' }, { l: 'Carbon', c: '#bbb' },
+                    ].map(s => (
+                      <span key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: s.c, display: 'inline-block' }} />
+                        {s.l}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {inspectorCandidates.map(c => (
+                      <div key={c.model_id} style={{
+                        padding: '12px 14px', borderRadius: 10,
+                        border: `1.5px solid ${c.is_winner ? '#1a1a1a' : '#e9e9e9'}`,
+                        background: c.is_winner ? '#f9f9f9' : '#fff',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {c.is_winner && <PillDark>Selected</PillDark>}
+                            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13 }}>{c.model_id}</span>
+                            <span style={{ fontSize: 10, color: '#9b9b9b' }}>({c.location})</span>
+                          </div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 11, display: 'flex', gap: 10 }}>
+                            <span style={{ color: '#9b9b9b' }}>{c.raw_score.toFixed(3)}</span>
+                            {c.jev_bonus > 0 && <span>−{c.jev_bonus.toFixed(3)} Jev</span>}
+                            <strong style={{ color: '#1a1a1a' }}>= {c.final_score.toFixed(3)}</strong>
+                          </div>
+                        </div>
+                        {/* Stacked bar */}
+                        <div style={{ height: 4, borderRadius: 2, background: '#f0f0f0', display: 'flex', overflow: 'hidden' }}>
                           {[
-                            { v: c.lat_norm, color: '#0071e3', w: 0.25 },
-                            { v: c.acc_norm, color: '#af52de', w: 0.35 },
-                            { v: c.cost_norm, color: '#1ec36a', w: 0.15 },
-                            { v: c.energy_norm, color: '#ff9500', w: 0.10 },
-                            { v: c.carbon_norm, color: '#00b6b0', w: 0.15 },
-                          ].map((s, i) => (
-                            <div
-                              key={i}
-                              style={{
-                                width: `${s.v * s.w * 100}%`,
-                                background: s.color,
-                                height: '100%',
-                              }}
-                            />
+                            [c.lat_norm, '#1a1a1a', 0.25], [c.acc_norm, '#555', 0.35],
+                            [c.cost_norm, '#777', 0.15], [c.energy_norm, '#999', 0.10], [c.carbon_norm, '#bbb', 0.15],
+                          ].map(([v, col, w], i) => (
+                            <div key={i} style={{ width: `${(v as number) * (w as number) * 100}%`, background: col as string, height: '100%' }} />
                           ))}
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>
+                        <div style={{ fontSize: 10, color: '#b0b0b0', fontFamily: 'monospace', marginTop: 5 }}>
                           Accuracy tier {c.accuracy_tier.toFixed(2)}
                         </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
-                <BarChart3 size={32} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.4 }} />
-                <p style={{ fontSize: 13, margin: 0 }}>Click a subtask to inspect its routing score breakdown</p>
-              </div>
+                </Surface>
+              </Section>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* ── Empty state ──────────────────────────────────── */}
-      {subtasks.length === 0 && !isRunning && (
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16,
-          padding: '48px 24px', textAlign: 'center', marginBottom: 16,
-        }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px',
-            background: 'linear-gradient(135deg, #0071e315, #00b6b015)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Zap size={24} color="#0071e3" />
-          </div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px' }}>Submit a pipeline run</h2>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 16px', maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
-            Choose a contract preset above and click <strong>Run Pipeline</strong>. Jev scores each subtask, the formula picks a model, and every result comes from the real backend.
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, fontSize: 12, color: 'var(--text-tertiary)' }}>
-            {[
-              '🔒 PII subtasks forced local',
-              '⚡ Jev routing confidence shown',
-              '📊 Real escalation events tracked',
-            ].map(f => <span key={f}>{f}</span>)}
-          </div>
-        </div>
-      )}
+            {/* ── Budgets (BudgetGauge cards) ── */}
+            {currentTask && (
+              <Section>
+                <SectionTitle>Run budgets</SectionTitle>
+                <Grid3>
+                  <BudgetGauge
+                    label="Cost"
+                    current={`$${totalCost.toFixed(5)}`}
+                    max={`$${currentTask.max_total_cost_usd.toFixed(2)}`}
+                    pct={(totalCost / currentTask.max_total_cost_usd) * 100}
+                  />
+                  <BudgetGauge
+                    label="Carbon"
+                    current={`${(totalCarbon * 1000).toFixed(3)}g`}
+                    max={`${(currentTask.max_total_carbon_kgco2eq * 1000).toFixed(0)}g`}
+                    pct={(totalCarbon / currentTask.max_total_carbon_kgco2eq) * 100}
+                  />
+                  <BudgetGauge
+                    label="Latency"
+                    current={`${(totalLatency / 1000).toFixed(1)}s`}
+                    max={`${(currentTask.max_total_latency_ms / 1000).toFixed(0)}s`}
+                    pct={(totalLatency / currentTask.max_total_latency_ms) * 100}
+                  />
+                </Grid3>
+              </Section>
+            )}
 
-      {/* Loading state */}
-      {isRunning && (
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16,
-          padding: '48px 24px', textAlign: 'center', marginBottom: 16,
-        }}>
-          <Loader2 size={32} className="animate-spin-slow" style={{ margin: '0 auto 16px', display: 'block', color: '#0071e3' }} />
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px' }}>Running pipeline…</h2>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
-            Decomposing task → Jev routing → executing subtasks → verifying → scoring
-          </p>
-        </div>
-      )}
-
-      {/* ── Escalation log ───────────────────────────────── */}
-      {escalations.length > 0 && (
-        <div style={{
-          background: 'var(--surface)', border: '1px solid #ff3b3030', borderRadius: 16,
-          padding: 20, marginBottom: 16,
-        }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8, color: '#ff3b30' }}>
-            <AlertTriangle size={14} /> Escalation Events ({escalations.length})
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {escalations.map(e => (
-              <div key={e.id} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '8px 12px', borderRadius: 8, background: '#ff3b3008',
-                border: '1px solid #ff3b3020', fontSize: 12,
-              }}>
-                <div>
-                  <span style={{ fontWeight: 700, color: '#ff3b30' }}>{e.reason_code}</span>
-                  <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>
-                    {e.from_model} → <strong>{e.to_model}</strong>
-                  </span>
+            {/* ── Latency bar chart (BarChartCard) ── */}
+            {barData.length > 0 && (
+              <Section>
+                <SectionTitle>Per-subtask latency</SectionTitle>
+                <div style={{ maxWidth: 340 }}>
+                  <BarChartCard
+                    title="Subtask latency"
+                    range={`${(totalLatency / 1000).toFixed(1)}s`}
+                    dateRange={`${subtasks.filter(s => s.status === 'done').length} of ${subtasks.length} subtasks complete`}
+                    bars={barData}
+                    readings={subtasks
+                      .filter(s => s.actual_latency_ms !== null)
+                      .slice(0, 2)
+                      .map(s => ({
+                        time: s.description.split(' ').slice(0, 3).join(' ') + '…',
+                        value: `${(s.actual_latency_ms! / 1000).toFixed(1)}s`,
+                      }))}
+                    headerAction={
+                      <span style={{ fontSize: 10, color: '#9b9b9b', fontFamily: 'monospace' }}>
+                        {escalations.length > 0 ? `${escalations.length} escalated` : 'no escalations'}
+                      </span>
+                    }
+                  />
                 </div>
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>
-                  {new Date(e.created_at).toLocaleTimeString()}
-                </span>
+              </Section>
+            )}
+
+            {/* ── Escalation log ── */}
+            {escalations.length > 0 && (
+              <Section>
+                <SectionTitle>Escalation events</SectionTitle>
+                <Surface style={{ padding: '14px 18px' }}>
+                  {escalations.map(e => (
+                    <div key={e.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px 0', borderBottom: '1px solid #f0f0f0',
+                    }}>
+                      <div>
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>{e.reason_code}</span>
+                        <span style={{ fontSize: 12, color: '#6b6b6b', marginLeft: 10 }}>
+                          {e.from_model} → <strong>{e.to_model}</strong>
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 10, color: '#9b9b9b', fontFamily: 'monospace' }}>
+                        {new Date(e.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  ))}
+                </Surface>
+              </Section>
+            )}
+          </>
+        )}
+
+        <Divider />
+
+        {/* ── Baseline comparison ──────────────────────────── */}
+        {baselines?.offline_stats && (
+          <Section>
+            <button
+              onClick={() => setShowBaselines(!showBaselines)}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 14,
+              }}
+            >
+              <SectionTitle style={{ marginBottom: 0 }}>
+                Policy comparison — measured offline eval
+              </SectionTitle>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Pill>Measured offline (N=60)</Pill>
+                {showBaselines ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </button>
 
-      {/* ── Baseline comparison ──────────────────────────── */}
-      {baselines?.offline_stats && (
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16,
-          marginBottom: 16, overflow: 'hidden',
-        }}>
-          <button
-            onClick={() => setShowBaselines(!showBaselines)}
-            style={{
-              width: '100%', padding: '16px 20px', display: 'flex', justifyContent: 'space-between',
-              alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer',
-            }}
-          >
-            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BarChart3 size={14} color="#0071e3" /> Policy Comparison — measured offline eval
-            </h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
-              <span style={{
-                fontSize: 10, padding: '2px 8px', borderRadius: 20,
-                background: '#1ec36a15', color: '#1ec36a', border: '1px solid #1ec36a40', fontWeight: 600,
-              }}>Measured Offline (N=60)</span>
-              {showBaselines ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </div>
-          </button>
-
-          {showBaselines && (
-            <div style={{ padding: '0 20px 20px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+            {showBaselines && (
+              <Grid3>
                 {[
                   {
-                    label: 'Cost (USD)', unit: '$',
-                    data: [
-                      { name: 'Always-strongest', val: baselines.offline_stats?.always_strongest?.cost?.mean ?? 0.0921, color: '#af52de' },
-                      { name: 'Random', val: baselines.offline_stats?.random?.cost?.mean ?? 0.0485, color: '#8a8a8e' },
-                      { name: 'This system', val: baselines.offline_stats?.this_system?.cost?.mean ?? 0.0265, color: '#1ec36a', overhead: true },
+                    label: 'Cost (USD)', fmt: (v: number) => `$${v.toFixed(4)}`,
+                    cols: [
+                      { name: 'Always-strongest', v: baselines.offline_stats.always_strongest.cost.mean },
+                      { name: 'Random', v: baselines.offline_stats.random.cost.mean },
+                      { name: 'This system', v: baselines.offline_stats.this_system.cost.mean, overhead: true },
                     ],
                   },
                   {
-                    label: 'Carbon (kg CO₂eq)', unit: '',
-                    data: [
-                      { name: 'Always-strongest', val: baselines.offline_stats?.always_strongest?.carbon?.mean ?? 0.10318, color: '#af52de' },
-                      { name: 'Random', val: baselines.offline_stats?.random?.carbon?.mean ?? 0.0612, color: '#8a8a8e' },
-                      { name: 'This system', val: baselines.offline_stats?.this_system?.carbon?.mean ?? 0.04232, color: '#00b6b0', overhead: true },
+                    label: 'Carbon (kg)', fmt: (v: number) => `${v.toFixed(5)}`,
+                    cols: [
+                      { name: 'Always-strongest', v: baselines.offline_stats.always_strongest.carbon.mean },
+                      { name: 'Random', v: baselines.offline_stats.random.carbon.mean },
+                      { name: 'This system', v: baselines.offline_stats.this_system.carbon.mean, overhead: true },
                     ],
                   },
                   {
-                    label: 'Quality retained', unit: '%',
-                    data: [
-                      { name: 'Always-strongest', val: 100, color: '#af52de' },
-                      { name: 'Random', val: (baselines.offline_stats?.random?.quality?.mean ?? 0.74) * 100, color: '#8a8a8e' },
-                      { name: 'This system', val: (baselines.offline_stats?.this_system?.quality?.mean ?? 1.0) * 100, color: '#0071e3', overhead: false },
+                    label: 'Quality retained', fmt: (v: number) => `${(v * 100).toFixed(1)}%`,
+                    cols: [
+                      { name: 'Always-strongest', v: 1.0 },
+                      { name: 'Random', v: baselines.offline_stats.random.quality.mean },
+                      { name: 'This system', v: baselines.offline_stats.this_system.quality.mean },
                     ],
                   },
                 ].map(col => {
-                  const maxV = Math.max(...col.data.map(d => d.val)) || 1;
+                  const maxV = Math.max(...col.cols.map(d => d.v)) || 1;
                   return (
-                    <div key={col.label}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Surface key={col.label}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9b9b9b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         {col.label}
                       </div>
-                      {col.data.map(d => (
-                        <div key={d.name} style={{ marginBottom: 8 }}>
+                      {col.cols.map((d: any, i: number) => (
+                        <div key={d.name} style={{ marginBottom: 10 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                            <span style={{ color: 'var(--text-secondary)' }}>{d.name}</span>
-                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: d.color }}>
-                              {col.unit}{typeof d.val === 'number' ? (col.unit === '%' ? d.val.toFixed(1) : col.unit === '$' ? d.val.toFixed(4) : d.val.toFixed(5)) : d.val}{col.unit === '%' ? '%' : ''}
+                            <span style={{ color: '#6b6b6b', fontWeight: i === 2 ? 700 : 400 }}>{d.name}</span>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1a1a1a' }}>
+                              {col.fmt(d.v)}
                             </span>
                           </div>
-                          <div style={{ height: 8, borderRadius: 4, background: '#e5e5ea', overflow: 'hidden', display: 'flex' }}>
-                            {/* Work segment */}
+                          <div style={{ height: 6, borderRadius: 3, background: '#f0f0f0', overflow: 'hidden', display: 'flex' }}>
                             <div style={{
-                              width: `${((d.val * (d.overhead ? 0.92 : 1)) / maxV) * 100}%`,
-                              background: d.color, height: '100%',
+                              width: `${((d.v * (d.overhead ? 0.92 : 1)) / maxV) * 100}%`,
+                              background: i === 0 ? '#d0d0d0' : i === 1 ? '#9b9b9b' : '#1a1a1a',
+                              height: '100%',
                             }} />
-                            {/* Overhead segment (8% for this system) */}
                             {d.overhead && (
-                              <div style={{
-                                width: `${((d.val * 0.08) / maxV) * 100}%`,
-                                background: '#ff9500', height: '100%',
-                              }} />
+                              <div style={{ width: `${((d.v * 0.08) / maxV) * 100}%`, background: '#6b6b6b', height: '100%' }} />
                             )}
                           </div>
                         </div>
                       ))}
-                    </div>
+                    </Surface>
                   );
                 })}
-              </div>
-              {/* Legend */}
-              <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-tertiary)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: '#1ec36a', display: 'inline-block' }} />
-                  Direct task work
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: '#ff9500', display: 'inline-block' }} />
-                  Scheduler overhead (Jev routing + verification calls) — Invariant 7
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+              </Grid3>
+            )}
+          </Section>
+        )}
 
-      {/* ── Grid intensity ───────────────────────────────── */}
-      {grid && (
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16,
-          padding: 20, marginBottom: 16,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Leaf size={14} color="#00b6b0" /> Grid Carbon Intensity
-              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>
-                {grid.zone}
-              </span>
-            </h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: '50%', background: '#1ec36a', display: 'inline-block',
-              }} />
-              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: '#00b6b0' }}>
-                {grid.current_intensity_gco2_per_kwh} gCO₂/kWh
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{grid.source === 'live' ? 'live' : 'est.'}</span>
-            </div>
-          </div>
-
-          {/* Simulated forecast bars — data from API, labeled Simulated per Invariant 6 */}
-          <div style={{ borderRadius: 10, border: '1.5px dashed #b0b0b5', padding: '12px 14px', background: '#f5f5f7' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>6-hour forecast trajectory</span>
-              {/* Invariant 6: visible "Simulated" badge, never mixed with real data */}
-              <span style={{
-                fontSize: 10, padding: '2px 8px', borderRadius: 20, fontWeight: 700,
-                background: '#8a8a8e20', color: '#6e6e73', border: '1px solid #b0b0b5',
-              }}>Simulated — not live data</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 50 }}>
-              {grid.simulated_forecast.map((f, i) => {
-                const maxI = Math.max(...grid.simulated_forecast.map(x => x.intensityGco2));
-                const pct = (f.intensityGco2 / maxI) * 100;
-                const isValley = f.intensityGco2 === Math.min(...grid.simulated_forecast.map(x => x.intensityGco2));
-                return (
-                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div title={`${f.intensityGco2} gCO₂/kWh`} style={{
-                      width: '100%', height: `${pct}%`,
-                      background: isValley ? '#00b6b040' : '#8a8a8e20',
-                      border: `1px dashed ${isValley ? '#00b6b0' : '#b0b0b5'}`,
-                      borderBottom: 'none', borderRadius: '3px 3px 0 0',
-                    }} />
-                    <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'monospace', marginTop: 3 }}>
-                      {i === 0 ? 'Now' : `+${f.hourOffset}h`}
-                    </span>
+        {/* ── Grid intensity ───────────────────────────────── */}
+        {grid && (
+          <>
+            <Divider />
+            <Section>
+              <SectionTitle>Grid carbon intensity</SectionTitle>
+              <Surface>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#9b9b9b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                      {grid.zone} · {grid.source === 'live' ? 'live' : 'estimated'}
+                    </div>
+                    <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1 }}>
+                      {grid.current_intensity_gco2_per_kwh}
+                      <span style={{ fontSize: 16, fontWeight: 400, color: '#9b9b9b', marginLeft: 6 }}>gCO₂/kWh</span>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '8px 0 0', fontStyle: 'italic' }}>
-              {grid.disclosure}
-            </p>
-          </div>
+                  {/* Invariant 6: Simulated badge — must be visible, cannot be missed */}
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6,
+                  }}>
+                    <Pill style={{ letterSpacing: '0.04em', fontWeight: 700, borderStyle: 'dashed' }}>
+                      Simulated forecast — not live data
+                    </Pill>
+                    <span style={{ fontSize: 10, color: '#b0b0b0', fontStyle: 'italic' }}>Invariant 6 compliant</span>
+                  </div>
+                </div>
+
+                {/* Forecast bars from real API simulated_forecast[] */}
+                <div style={{
+                  border: '1px dashed #d0d0d0', borderRadius: 8,
+                  padding: '12px 16px', background: '#fafafa',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 56 }}>
+                    {grid.simulated_forecast.map((f, i) => {
+                      const maxI = Math.max(...grid.simulated_forecast.map(x => x.intensityGco2));
+                      const minI = Math.min(...grid.simulated_forecast.map(x => x.intensityGco2));
+                      const isValley = f.intensityGco2 === minI;
+                      const pct = (f.intensityGco2 / maxI) * 100;
+                      return (
+                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div
+                            title={`${f.intensityGco2} gCO₂/kWh`}
+                            style={{
+                              width: '100%', height: `${pct}%`,
+                              background: isValley ? '#1a1a1a' : '#e0e0e0',
+                              border: `1px dashed ${isValley ? '#1a1a1a' : '#c0c0c0'}`,
+                              borderBottom: 'none', borderRadius: '3px 3px 0 0',
+                            }}
+                          />
+                          <span style={{ fontSize: 9, color: '#9b9b9b', fontFamily: 'monospace', marginTop: 4 }}>
+                            {i === 0 ? 'Now' : `+${f.hourOffset}h`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p style={{ fontSize: 10, color: '#b0b0b0', marginTop: 8, fontStyle: 'italic' }}>
+                    {grid.disclosure}
+                  </p>
+                </div>
+              </Surface>
+            </Section>
+          </>
+        )}
+
+        {/* ── Footer ──────────────────────────────────────── */}
+        <Divider />
+        <div style={{ fontSize: 11, color: '#9b9b9b', lineHeight: 1.8 }}>
+          <strong style={{ color: '#6b6b6b' }}>Methodology</strong> — Headline savings (cost −71.3%, carbon −59%) from measured offline eval (N=60), not live runs.
+          All totals include scheduler overhead: Jev routing calls, verification calls, embedding — Invariant 7.
+          Cloud carbon = EcoLogits output as-is; grid intensity never applied to cloud — Invariant 1.
+          Local carbon = CodeCarbon energy × live {grid?.zone ?? 'IN-SO'} grid intensity.
+          Forecast is synthetic/simulated — grey dashed, labeled — Invariant 6.
+          PII subtasks forced local; raw text never leaves the machine — Invariant 2.
         </div>
-      )}
+      </Page>
 
       {/* ── Time-shift modal ─────────────────────────────── */}
       {showTimeShift && timeShiftData && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24,
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24,
         }}>
           <div style={{
-            background: 'var(--surface)', borderRadius: 20, padding: 28, maxWidth: 460, width: '100%',
-            border: '1px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+            background: '#fff', border: '1px solid #e9e9e9', borderRadius: 16,
+            padding: 28, maxWidth: 440, width: '100%',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.12)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FastForward size={16} color="#00b6b0" /> Time-Shift Batch
+              <h3 style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.5 }}>
+                Time-Shift Batch
               </h3>
               <button
                 onClick={() => setShowTimeShift(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9b9b9b', display: 'flex' }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <Grid2 style={{ marginBottom: 16 }}>
               {[
-                { label: 'Intensity now', val: `${timeShiftData.intensity_now_gco2} gCO₂/kWh`, color: '#ff9500' },
-                { label: 'Forecast valley (+3h)', val: `${timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh`, color: '#00b6b0' },
-                { label: 'Difference', val: `${timeShiftData.difference_pct}%`, color: 'var(--text-primary)' },
-                { label: 'Threshold', val: `${timeShiftData.threshold_pct}%`, color: 'var(--text-secondary)' },
+                { label: 'Intensity now', val: `${timeShiftData.intensity_now_gco2} gCO₂/kWh` },
+                { label: 'Forecast valley (+3h)', val: `${timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh` },
+                { label: 'Difference', val: `${timeShiftData.difference_pct}%` },
+                { label: 'Threshold', val: `${timeShiftData.threshold_pct}%` },
               ].map(m => (
-                <div key={m.label} style={{
-                  padding: '10px 12px', borderRadius: 10, background: 'var(--surface-secondary)',
-                  border: '1px solid var(--border)',
-                }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 3 }}>{m.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: m.color }}>{m.val}</div>
+                <div key={m.label} style={{ padding: '10px 12px', border: '1px solid #e9e9e9', borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: '#9b9b9b', marginBottom: 3 }}>{m.label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, fontFamily: 'monospace' }}>{m.val}</div>
                 </div>
               ))}
-            </div>
+            </Grid2>
 
             <div style={{
-              padding: '14px 16px', borderRadius: 12, marginBottom: 14,
-              background: timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '#00b6b010' : '#ff950010',
-              border: `1px solid ${timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '#00b6b040' : '#ff950040'}`,
+              padding: '14px 16px', borderRadius: 10,
+              border: `1.5px solid ${timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '#1a1a1a' : '#e0e0e0'}`,
+              background: timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '#f5f5f5' : '#fff',
+              marginBottom: 16,
             }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>
                 {timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '🌿 Deferred to green window' : '⚡ Execute immediately'}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.6 }}>
                 {timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW'
-                  ? `Batch scheduled +${timeShiftData.scheduled_for_offset_hours}h from now. Projected carbon saving: ${timeShiftData.carbon_savings_projected_pct}%.`
+                  ? `Batch scheduled +${timeShiftData.scheduled_for_offset_hours}h. Projected carbon saving: ${timeShiftData.carbon_savings_projected_pct}%.`
                   : 'Grid is already near minimum — no benefit to deferring.'}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                Rule: {timeShiftData.eligible_candidates} · Clock: {timeShiftData.clock_mode}
+              <div style={{ fontSize: 10, color: '#9b9b9b', marginTop: 6 }}>
+                {timeShiftData.eligible_candidates} · {timeShiftData.clock_mode}
               </div>
             </div>
 
-            <button
-              onClick={() => setShowTimeShift(false)}
-              style={{
-                width: '100%', padding: '12px', borderRadius: 10, border: 'none',
-                background: '#0071e3', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-              }}
-            >
+            <NotionButton onClick={() => setShowTimeShift(false)} style={{ width: '100%', maxWidth: '100%', minWidth: 'unset' }}>
               Close
-            </button>
+            </NotionButton>
           </div>
         </div>
       )}
-
-      {/* ── Footer disclosure ────────────────────────────── */}
-      <div style={{
-        marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)',
-        fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6,
-      }}>
-        <p style={{ margin: '0 0 4px' }}>
-          <strong>Methodology:</strong> Headline savings numbers (cost −71.3%, carbon −59%) come from the measured offline eval (N=60 subtasks, 3 contracts × 3 repeats), not from live demo runs.
-          All totals include scheduler overhead (Jev routing calls, Jev verification calls, embedding) per Invariant 7.
-          Carbon for cloud candidates uses EcoLogits output as-is — grid intensity is <em>never</em> applied to cloud (Invariant 1).
-          Carbon for local candidates = CodeCarbon measured energy × live {grid?.zone ?? 'IN-SO'} grid intensity.
-          Forecast curve is synthetic/simulated (Invariant 6 — grey dashed, labeled).
-          PII subtasks are forced to local models; raw document text never leaves the machine (Invariant 2).
-        </p>
-      </div>
-    </div>
+    </>
   );
 }

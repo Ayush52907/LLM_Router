@@ -1,20 +1,17 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import StyledRegistry from '../lib/styled-registry';
 
 export const metadata: Metadata = {
   title: 'EcoRouter — Carbon-Aware LLM Scheduler',
-  description: 'Routes each subtask to the right model, in the right place, at the right time. Savings proven, not asserted.',
+  description: 'Routes each subtask to the right model, in the right place, at the right time.',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased" style={{ background: 'var(--background)', color: 'var(--text-primary)' }}>
-        {children}
+      <body>
+        <StyledRegistry>{children}</StyledRegistry>
       </body>
     </html>
   );

@@ -59,3 +59,22 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 - Need to confirm Jev access (Vercel AI Gateway API key). Heuristic fallback is ready to build if blocked. See `OPEN_QUESTIONS.md`.
 - Electricity Maps free tier zone availability for `IN-KA` (Bengaluru) is unverified. See `OPEN_QUESTIONS.md`.
 - EcoLogits `impacts.gwp.value` may be a `RangeValue` not a scalar. Sidecar must handle both cases. Already noted in CONTEXT.md locked decisions.
+
+## 2026-09-22 | Session 4 — Dashboard Apple-Simple Redesign + Real Data Verification
+
+**Done this session:**
+- Completely rebuilt `dashboard/app/page.tsx` — Apple-simple light theme, zero mocked data.
+- CSS custom property light theme (`globals.css`). Removed `dark` class from `layout.tsx`.
+- All endpoints wired: `/api/health`, `/api/grid`, `/api/baselines`, `/api/config`, `/api/tasks/latest`, `/api/tasks` (POST), `/api/score`, `/api/time-shift`.
+- Simulated forecast bars from real `simulated_forecast[]` from `/api/grid` — Simulated badge visible per Invariant 6.
+- Progressive disclosure: headline KPIs → submit → DAG + inspector → escalation log → comparison → grid → footer.
+- Subtask: StatusBadge animated, PII lock badge, Jev confidence %, actual metrics row after done.
+- Escalation log from real DB: reason_code, from→to model, timestamp.
+- Policy comparison from real `offline_stats` (summary.json). Overhead segment per Invariant 7.
+- Time-shift modal from real `/api/time-shift`. Footer cites Invariants 1,2,6,7.
+
+**Live verification (all confirmed):**
+- `/api/grid` → 406 gCO₂/kWh IN-SO live ✅
+- `/api/baselines` → cost −71.3%, carbon −59%, quality 100% ✅
+- `POST /api/tasks` → 5 subtasks, 4 escalation events, real Jev confidence 0.18–0.87 ✅
+- Dashboard at `http://localhost:3000` ✅ · Commit `f5726b1` pushed ✅
