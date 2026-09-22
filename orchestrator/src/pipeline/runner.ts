@@ -28,6 +28,7 @@ import { createJevClient } from '../integrations/jev.js';
 import { createElectricityMapsClient } from '../integrations/electricity-maps.js';
 import { defaultSidecarClient } from '../integrations/sidecar-client.js';
 import { defaultOllamaClient } from '../integrations/ollama-client.js';
+import { defaultCloudGatewayClient } from '../integrations/gateway-client.js';
 import { verifyRawPiiOutput } from '../privacy/local-verifier.js';
 
 export interface RunPipelineOptions {
@@ -190,9 +191,13 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
       outputTokens = ollamaRes.outputTokens;
       latencyMs = ollamaRes.totalDurationMs;
     } else {
-      // Cloud model execution prompt (redacted prompt if pii)
+      // Cloud model execution prompt (redacted prompt if pii: Invariant 2)
       const promptToUse = (st.data_sensitivity === 'pii' && st.redacted_prompt) ? st.redacted_prompt : st.prompt;
-      subtaskOutput = `[${chosen.model_id} processed response for ${st.type}]: ${promptToUse.substring(0, 120)}`;
+      const cloudRes = await defaultCloudGatewayClient.generate(chosen.model_id, promptToUse);
+      subtaskOutput = cloudRes.response;
+      inputTokens = cloudRes.inputTokens;
+      outputTokens = cloudRes.outputTokens;
+      latencyMs = cloudRes.totalDurationMs;
     }
 
     st.output = subtaskOutput;

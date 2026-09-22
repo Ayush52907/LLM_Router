@@ -1,7 +1,7 @@
 {
   "_comment": "Local grid zone configuration. Used for Electricity Maps lookup and local carbon computation only. Cloud carbon never uses this zone.",
-  "local_zone": "IN-KA",
-  "local_zone_label": "Bengaluru, India",
+  "local_zone": "IN-SO",
+  "local_zone_label": "Southern India (Bengaluru)",
   "_mock_intensity_gco2_per_kwh": 650,
   "_mock_label": "Used when ELECTRICITY_MAPS_MODE=mock. Represents a plausible Bengaluru average.",
   "_time_shift_threshold_pct": 15,

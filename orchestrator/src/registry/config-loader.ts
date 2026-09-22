@@ -181,7 +181,7 @@ export function loadConfig(): AppConfig {
       other: tokenDefaults.other,
     },
     emaAlpha: tokenDefaults._ema_alpha,
-    localZone: zones.local_zone,
+    localZone: process.env['LOCAL_GRID_ZONE'] || zones.local_zone,
     mockGridIntensityGco2PerKwh: zones._mock_intensity_gco2_per_kwh,
     timeShiftThresholdPct: zones._time_shift_threshold_pct,
   };

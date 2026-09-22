@@ -20,8 +20,20 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional
+
+try:
+    from dotenv import load_dotenv
+    # Load .env from root repo directory or current dir
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+    else:
+        load_dotenv()
+except ImportError:
+    pass
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

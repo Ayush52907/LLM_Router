@@ -2,6 +2,10 @@
  * Orchestrator Entry Point.
  */
 
+import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config(); // fallback to current dir
 import { getDb, seedModels } from './db/schema.js';
 import { loadConfig } from './registry/config-loader.js';
 import { createServer } from './api/server.js';

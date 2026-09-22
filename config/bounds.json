@@ -1,9 +1,9 @@
 {
-  "_comment": "Computed by calibrate_bounds.js on 2026-09-21T20:01:22.198Z.",
+  "_comment": "Computed by calibrate_bounds.js on 2026-09-22T03:48:42.127Z.",
   "_reference_subtask": "2000 input + 500 output = 2500 total tokens",
   "_formula": "bound_X = 1.25 * max over ALL registry candidates",
   "_grid_intensity_used": "500 gCO2/kWh (calibration estimate)",
-  "latency_ms": 8750,
+  "latency_ms": 7500,
   "cost_usd": 0.007813,
   "energy_kwh": 0.00125,
   "carbon_kgco2eq": 0.00875
