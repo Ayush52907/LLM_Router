@@ -1,25 +1,18 @@
 'use client';
 
 /**
- * EcoRouter — Apple-Inspired Production Interface.
- * Pure monochrome / black & white palette (#1d1d1f, #6e6e73, #f5f5f7, #ffffff).
- * SF Pro typography stack, generous whitespace, unified component hierarchy.
- * Zero mocked data — 100% connected to real orchestrator endpoints.
+ * EcoRouter — Claude-Inspired Calm Interface.
+ * Warm parchment aesthetic, generous whitespace, quiet typography hierarchy,
+ * single terracotta accent used with extreme restraint, minimal borders.
+ * Zero admin-panel / dashboard clutter.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Play, FastForward, Settings, Lock, Cloud, HardDrive,
-  AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  Zap, Flame, ShieldAlert, Sliders, ArrowRight, Clock,
-  DollarSign, Leaf, RefreshCw, X, FileText, Check
+  ArrowUp, Lock, Cloud, HardDrive, AlertCircle,
+  ChevronDown, ChevronUp, Sliders, Clock, FastForward,
+  Check, RefreshCw, X, ShieldAlert, Flame, Sparkles
 } from 'lucide-react';
-
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { CenterFlow } from '../components/ui/CenterFlow';
-import { BanterLoader } from '../components/BanterLoader';
 
 const API_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL ?? 'http://localhost:3001';
 
@@ -123,7 +116,25 @@ interface Weights {
   carbon: number;
 }
 
-export default function EcoRouterApplePage() {
+interface CandidateScore {
+  model_id: string;
+  location: string;
+  accuracy_tier: number;
+  raw_score: number;
+  jev_bonus: number;
+  final_score: number;
+  lat_norm: number;
+  acc_norm: number;
+  cost_norm: number;
+  energy_norm: number;
+  carbon_norm: number;
+  predicted_latency_ms: number;
+  predicted_cost_usd: number;
+  predicted_carbon_kgco2eq: number;
+  is_winner: boolean;
+}
+
+export default function EcoRouterClaudePage() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean | null>(null);
   const [reconciliationLogs, setReconciliationLogs] = useState<any[]>([]);
@@ -136,9 +147,9 @@ export default function EcoRouterApplePage() {
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
-  // Selected subtask for Route Inspector
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [inspectorCandidates, setInspectorCandidates] = useState<any[]>([]);
+  // Inspector expansion per subtask
+  const [expandedSubtaskId, setExpandedSubtaskId] = useState<string | null>(null);
+  const [candidatesMap, setCandidatesMap] = useState<Record<string, CandidateScore[]>>({});
 
   // Input & Parameter controls
   const [customPrompt, setCustomPrompt] = useState(CONTRACT_ACME);
@@ -158,7 +169,6 @@ export default function EcoRouterApplePage() {
   // Time-shift modal & details
   const [showTimeShift, setShowTimeShift] = useState(false);
   const [timeShiftData, setTimeShiftData] = useState<any | null>(null);
-  const [showDetailsSection, setShowDetailsSection] = useState(false);
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -166,44 +176,69 @@ export default function EcoRouterApplePage() {
 
   useEffect(() => {
     async function init() {
-      const h = await fetch(`${API_BASE}/api/health`).catch(() => null);
-      if (h?.ok) {
-        setApiOnline(true);
-        const hd = await h.json().catch(() => null);
-        if (hd && typeof hd.network_online === 'boolean') {
-          setIsNetworkOnline(hd.network_online);
+      try {
+        const h = await fetch(`${API_BASE}/api/health`);
+        if (h.ok) {
+          setApiOnline(true);
+          const hd = await h.json();
+          const onlineStatus = typeof hd.online === 'boolean'
+            ? hd.online
+            : (typeof hd.connectivity?.online === 'boolean' ? hd.connectivity.online : true);
+          setIsNetworkOnline(onlineStatus);
+        } else {
+          setApiOnline(false);
         }
-      } else {
+      } catch (err) {
+        console.warn('[EcoRouter] /api/health unreachable:', err);
         setApiOnline(false);
       }
 
-      const rec = await fetch(`${API_BASE}/api/reconciliation`).catch(() => null);
-      if (rec?.ok) {
-        const rd = await rec.json().catch(() => null);
-        if (rd?.logs) setReconciliationLogs(rd.logs);
-      }
-
-      const g = await fetch(`${API_BASE}/api/grid`).catch(() => null);
-      if (g?.ok) setGrid(await g.json());
-
-      const b = await fetch(`${API_BASE}/api/baselines`).catch(() => null);
-      if (b?.ok) setBaselines(await b.json());
-
-      const c = await fetch(`${API_BASE}/api/config`).catch(() => null);
-      if (c?.ok) {
-        const d = await c.json();
-        if (d.weights) setWeights(d.weights);
-      }
-
-      const l = await fetch(`${API_BASE}/api/tasks/latest`).catch(() => null);
-      if (l?.ok) {
-        const d = await l.json();
-        if (d.task && d.subtasks?.length > 0) {
-          setCurrentTask(d.task);
-          setSubtasks(d.subtasks);
-          setEscalations(d.escalations ?? []);
-          setSelectedId(d.subtasks[0].id);
+      try {
+        const rec = await fetch(`${API_BASE}/api/reconciliation`);
+        if (rec.ok) {
+          const rd = await rec.json();
+          if (rd?.logs) setReconciliationLogs(rd.logs);
         }
+      } catch (err) {
+        console.warn('[EcoRouter] /api/reconciliation fetch failed:', err);
+      }
+
+      try {
+        const g = await fetch(`${API_BASE}/api/grid`);
+        if (g.ok) setGrid(await g.json());
+      } catch (err) {
+        console.warn('[EcoRouter] /api/grid fetch failed:', err);
+      }
+
+      try {
+        const b = await fetch(`${API_BASE}/api/baselines`);
+        if (b.ok) setBaselines(await b.json());
+      } catch (err) {
+        console.warn('[EcoRouter] /api/baselines fetch failed:', err);
+      }
+
+      try {
+        const c = await fetch(`${API_BASE}/api/config`);
+        if (c.ok) {
+          const d = await c.json();
+          if (d.weights) setWeights(d.weights);
+        }
+      } catch (err) {
+        console.warn('[EcoRouter] /api/config fetch failed:', err);
+      }
+
+      try {
+        const l = await fetch(`${API_BASE}/api/tasks/latest`);
+        if (l.ok) {
+          const d = await l.json();
+          if (d.task && d.subtasks?.length > 0) {
+            setCurrentTask(d.task);
+            setSubtasks(d.subtasks);
+            setEscalations(d.escalations ?? []);
+          }
+        }
+      } catch (err) {
+        console.warn('[EcoRouter] /api/tasks/latest fetch failed:', err);
       }
     }
     init();
@@ -211,29 +246,47 @@ export default function EcoRouterApplePage() {
 
   // ── 2. Route Inspector dynamic scoring ──────────────────────────────────────
 
-  const fetchInspector = useCallback(async (st: Subtask, w: Weights) => {
-    const r = await fetch(`${API_BASE}/api/score`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subtask_type: st.type,
-        complexity_tier: st.complexity_tier,
-        data_sensitivity: st.pii_class === 'raw_pii' ? 'pii' : (isPiiGuard ? 'pii' : 'internal'),
-        urgency: isUrgent ? 'urgent' : 'normal',
-        weights: w,
-        input_tokens: 2000,
-      }),
-    }).catch(() => null);
-    if (r?.ok) {
-      const d = await r.json();
-      setInspectorCandidates(d.candidates ?? []);
+  const fetchCandidatesForSubtask = useCallback(async (st: Subtask, w: Weights) => {
+    try {
+      const r = await fetch(`${API_BASE}/api/score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subtask_type: st.type,
+          complexity_tier: st.complexity_tier,
+          data_sensitivity: st.pii_class === 'raw_pii' ? 'pii' : (isPiiGuard ? 'pii' : 'internal'),
+          urgency: isUrgent ? 'urgent' : 'normal',
+          weights: w,
+          input_tokens: 2000,
+        }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setCandidatesMap(prev => ({ ...prev, [st.id]: d.candidates ?? [] }));
+      }
+    } catch (err) {
+      console.warn('[EcoRouter] fetchCandidates failed:', err);
     }
   }, [isUrgent, isPiiGuard]);
 
+  const toggleInspect = (st: Subtask) => {
+    if (expandedSubtaskId === st.id) {
+      setExpandedSubtaskId(null);
+    } else {
+      setExpandedSubtaskId(st.id);
+      if (!candidatesMap[st.id]) {
+        fetchCandidatesForSubtask(st, weights);
+      }
+    }
+  };
+
+  // Re-fetch inspector data when weights change
   useEffect(() => {
-    const st = subtasks.find(s => s.id === selectedId);
-    if (st) fetchInspector(st, weights);
-  }, [selectedId, weights, isUrgent, isPiiGuard, fetchInspector]);
+    if (expandedSubtaskId) {
+      const st = subtasks.find(s => s.id === expandedSubtaskId);
+      if (st) fetchCandidatesForSubtask(st, weights);
+    }
+  }, [weights, isUrgent, isPiiGuard, expandedSubtaskId, subtasks, fetchCandidatesForSubtask]);
 
   // ── 3. Run Pipeline ─────────────────────────────────────────────────────────
 
@@ -263,14 +316,15 @@ export default function EcoRouterApplePage() {
         setCurrentTask(data.task);
         setSubtasks(data.subtasks);
         setEscalations(data.escalations ?? []);
-        if (data.subtasks.length > 0) setSelectedId(data.subtasks[0].id);
+        setCandidatesMap({});
+        setExpandedSubtaskId(null);
 
         setTimeout(() => {
           resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 150);
+        }, 200);
       }
     } catch (err: any) {
-      setRunError(err.message ?? 'Failed to execute pipeline');
+      setRunError(err.message ?? 'Failed to schedule contract pipeline');
     } finally {
       setIsRunning(false);
     }
@@ -279,838 +333,624 @@ export default function EcoRouterApplePage() {
   // ── 4. Time Shift Batch API ────────────────────────────────────────────────
 
   const handleTimeShift = useCallback(async () => {
-    const r = await fetch(`${API_BASE}/api/time-shift`, { method: 'POST' }).catch(() => null);
-    if (r?.ok) {
-      setTimeShiftData(await r.json());
-      setShowTimeShift(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/time-shift`, { method: 'POST' });
+      if (r.ok) {
+        setTimeShiftData(await r.json());
+        setShowTimeShift(true);
+      }
+    } catch (err) {
+      console.warn('[EcoRouter] time-shift call failed:', err);
     }
   }, []);
 
-  const selectedSt = subtasks.find(s => s.id === selectedId) ?? null;
-  const selectedEsc = selectedSt ? escalations.find(e => e.subtask_id === selectedSt.id) : null;
-
   return (
-    <div className="min-h-screen bg-[#fafafc] text-[#1d1d1f] flex flex-col font-sans antialiased">
-      {/* Full-screen loading overlay during run */}
-      {isRunning && <BanterLoader label="Evaluating routing with Jev and scoring candidates…" />}
+    <div className="min-h-screen bg-[#FAF9F5] text-[#1F1E1D] flex flex-col font-sans selection:bg-[#FBF4F0] selection:text-[#CC5A36]">
+      
+      {/* ── Minimal Claude Navigation Bar ───────────────────────────────────── */}
+      <header className="w-full px-6 py-4 flex items-center justify-between max-w-4xl mx-auto border-b border-[#E5E4DE]/60">
+        <div className="flex items-center gap-2">
+          <span className="font-serif-claude text-xl text-[#1F1E1D] tracking-tight font-medium">EcoRouter</span>
+          <span className="text-[#A09D95] text-sm">/</span>
+          <span className="text-xs text-[#7A7870] font-normal tracking-normal hidden sm:inline">
+            Carbon-Aware LLM Scheduler
+          </span>
+        </div>
 
-      {/* ── Apple-Style Minimal Header ───────────────────────────────────────── */}
-      <header className="w-full border-b border-[#e5e5e7] bg-white/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2 h-2 rounded-full bg-[#1d1d1f]" />
-            <span className="font-semibold text-sm tracking-tight text-[#1d1d1f]">EcoRouter</span>
-            <span className="text-xs text-[#d2d2d7]">/</span>
-            <span className="text-xs text-[#6e6e73] font-medium hidden sm:inline">Carbon-Aware LLM Scheduler</span>
+        <div className="flex items-center gap-3 text-xs text-[#7A7870]">
+          {grid && (
+            <span className="flex items-center gap-1.5 font-mono-claude text-[11px] text-[#6B6862]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#1E6B48]" />
+              <span>{grid.zone}</span>
+              <span className="text-[#D8D6CD]">·</span>
+              <span>{grid.current_intensity_gco2_per_kwh} gCO₂/kWh</span>
+            </span>
+          )}
+
+          <div className="flex items-center gap-1.5 text-[11px] text-[#7A7870]">
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              isNetworkOnline === false ? 'bg-[#8C5D14]' : (apiOnline ? 'bg-[#1E6B48]' : 'bg-[#A09D95]')
+            }`} />
+            <span>{isNetworkOnline === false ? 'Offline Fallback' : (apiOnline ? 'Online' : 'Connecting')}</span>
           </div>
 
-          <div className="flex items-center gap-2.5 text-xs text-[#6e6e73]">
-            {grid && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f7] text-[#1d1d1f] font-mono text-xs border border-[#e5e5e7]">
-                <Leaf className="w-3 h-3 text-emerald-600 shrink-0" />
-                <span>{grid.zone}</span>
-                <span className="text-[#d2d2d7]">·</span>
-                <span className="font-semibold">{grid.current_intensity_gco2_per_kwh} gCO₂/kWh</span>
-              </span>
-            )}
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-[#e5e5e7] text-[11px] text-[#6e6e73] shadow-xs">
-              <span className={`w-2 h-2 rounded-full ${isNetworkOnline === false ? 'bg-amber-500' : (apiOnline ? 'bg-emerald-500' : 'bg-amber-400')}`} />
-              <span>{isNetworkOnline === false ? 'Offline Mode' : (apiOnline ? 'System Online' : 'Connecting')}</span>
-            </div>
-            {isNetworkOnline === false && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 text-[11px] font-semibold border border-amber-300 shadow-xs">
-                <Zap className="w-3 h-3 text-amber-600 fill-amber-500" /> Degraded Local
-              </span>
-            )}
-            {reconciliationLogs.length > 0 && (
-              <button
-                onClick={() => setShowReconciliationModal(true)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1d1d1f] text-white text-[11px] font-medium hover:bg-[#333336] transition-colors cursor-pointer shadow-xs"
-              >
-                <RefreshCw className="w-2.5 h-2.5" /> {reconciliationLogs.length} Reconciled
-              </button>
-            )}
-          </div>
+          {reconciliationLogs.length > 0 && (
+            <button
+              onClick={() => setShowReconciliationModal(true)}
+              className="text-[11px] text-[#CC5A36] hover:text-[#B84E2D] underline underline-offset-2 cursor-pointer transition-colors"
+            >
+              {reconciliationLogs.length} reconciled
+            </button>
+          )}
         </div>
       </header>
 
-      {/* ── SECTION 1: Hero / Input ────────────────────────── */}
-      <section className="relative w-full flex flex-col justify-center items-center px-6 pt-10 pb-8 sm:pt-14 sm:pb-10">
-        <CenterFlow className="w-full max-w-4xl flex flex-col items-center">
-          {/* Apple Calm Headline */}
-          <div className="text-center mb-8 max-w-xl mx-auto">
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1d1d1f] mb-2.5">
-              Optimize Every Routing Decision.
-            </h1>
-            <p className="text-sm text-[#6e6e73] leading-relaxed">
-              Decompose complex contracts and route each subtask to the optimal model,
-              balancing latency, accuracy, cost, energy, and carbon footprint.
-            </p>
+      {/* ── Main Single-Focal Experience ────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col items-center px-6 pt-16 pb-20 sm:pt-24 sm:pb-24 max-w-3xl mx-auto w-full">
+        
+        {/* Calm Editorial Greeting */}
+        <div className="text-center mb-10 w-full">
+          <h1 className="font-serif-claude text-3xl sm:text-4xl text-[#1F1E1D] font-normal tracking-tight mb-3">
+            What contract would you like to schedule?
+          </h1>
+          <p className="text-sm text-[#6B6862] leading-relaxed max-w-lg mx-auto font-light">
+            Decomposes multi-step legal agreements into privacy-isolated subtasks, routing each
+            to the optimal model based on latency, accuracy, cost, and live carbon intensity.
+          </p>
+        </div>
+
+        {/* ── The Claude Centerpiece Input Container ─────────────────────────── */}
+        <div className="w-full bg-[#FFFFFF] border border-[#E5E4DE] rounded-3xl shadow-[0_4px_24px_rgba(0,0,0,0.03)] transition-all duration-200 focus-within:border-[#D8D6CD] focus-within:shadow-[0_6px_32px_rgba(0,0,0,0.06)] p-5 sm:p-6">
+          
+          {/* Preset Selector Pill Tabs */}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#F3F3EE] text-xs">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => { setCustomPrompt(CONTRACT_ACME); setActivePreset('acme'); }}
+                className={`px-3 py-1 rounded-full text-xs transition-colors cursor-pointer ${
+                  activePreset === 'acme'
+                    ? 'bg-[#F3F3EE] text-[#1F1E1D] font-medium'
+                    : 'text-[#7A7870] hover:text-[#1F1E1D]'
+                }`}
+              >
+                Acme MSA
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCustomPrompt(CONTRACT_CYBERDYNE); setActivePreset('cyberdyne'); }}
+                className={`px-3 py-1 rounded-full text-xs transition-colors cursor-pointer ${
+                  activePreset === 'cyberdyne'
+                    ? 'bg-[#F3F3EE] text-[#1F1E1D] font-medium'
+                    : 'text-[#7A7870] hover:text-[#1F1E1D]'
+                }`}
+              >
+                CyberDyne Vendor
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePreset('custom')}
+                className={`px-3 py-1 rounded-full text-xs transition-colors cursor-pointer ${
+                  activePreset === 'custom'
+                    ? 'bg-[#F3F3EE] text-[#1F1E1D] font-medium'
+                    : 'text-[#7A7870] hover:text-[#1F1E1D]'
+                }`}
+              >
+                Custom Agreement
+              </button>
+            </div>
+
+            <span className="font-mono-claude text-[11px] text-[#A09D95]">
+              ~{Math.round(customPrompt.length / 4)} tokens
+            </span>
           </div>
 
-          {/* Apple-Style Input Box Container */}
-          <div className="w-full max-w-3xl bg-white border border-[#e5e5e7] rounded-3xl shadow-[0_4px_30px_rgba(0,0,0,0.04)] transition-all duration-200 focus-within:border-[#1d1d1f] focus-within:shadow-[0_8px_36px_rgba(0,0,0,0.07)] p-5 sm:p-6">
-            {/* Apple Segmented Control for Presets */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-[#f5f5f7]">
-              <div className="inline-flex items-center p-1 rounded-xl bg-[#f5f5f7] border border-[#e5e5e7] gap-1 shadow-inner">
-                <button
-                  type="button"
-                  onClick={() => { setCustomPrompt(CONTRACT_ACME); setActivePreset('acme'); }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    activePreset === 'acme'
-                      ? 'bg-white text-[#1d1d1f] shadow-xs border border-zinc-200/80 font-semibold'
-                      : 'text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-white/60'
-                  }`}
-                >
-                  Acme Cloud (MSA)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setCustomPrompt(CONTRACT_CYBERDYNE); setActivePreset('cyberdyne'); }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    activePreset === 'cyberdyne'
-                      ? 'bg-white text-[#1d1d1f] shadow-xs border border-zinc-200/80 font-semibold'
-                      : 'text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-white/60'
-                  }`}
-                >
-                  CyberDyne (Vendor)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivePreset('custom')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    activePreset === 'custom'
-                      ? 'bg-white text-[#1d1d1f] shadow-xs border border-zinc-200/80 font-semibold'
-                      : 'text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-white/60'
-                  }`}
-                >
-                  Custom Prompt
-                </button>
-              </div>
+          {/* Spacious Quiet Textarea */}
+          <textarea
+            rows={6}
+            value={customPrompt}
+            onChange={(e) => { setCustomPrompt(e.target.value); setActivePreset('custom'); }}
+            placeholder="Paste contract clauses, obligations, or instructions..."
+            className="w-full resize-y font-mono-claude text-xs text-[#1F1E1D] placeholder:text-[#A09D95] leading-relaxed bg-transparent outline-none border-none min-h-[120px]"
+          />
 
-              <div className="flex items-center gap-1.5 font-mono text-xs text-[#86868b]">
-                <FileText className="w-3.5 h-3.5" />
-                <span>~{Math.round(customPrompt.length / 4)} tokens</span>
-              </div>
+          {/* Attached Quiet Controls Toolbar */}
+          <div className="pt-3 mt-2 border-t border-[#F3F3EE] flex flex-wrap items-center justify-between gap-3">
+            {/* Minimal Toggle Pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsUrgent(!isUrgent)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
+                  isUrgent
+                    ? 'bg-[#FAF0EB] text-[#CC5A36] border-[#F0D4C8] font-medium'
+                    : 'bg-transparent border-[#E5E4DE] text-[#7A7870] hover:text-[#1F1E1D] hover:border-[#D8D6CD]'
+                }`}
+              >
+                <Flame className={`w-3 h-3 ${isUrgent ? 'text-[#CC5A36]' : 'text-[#A09D95]'}`} />
+                <span>Urgent</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPiiGuard(!isPiiGuard)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
+                  isPiiGuard
+                    ? 'bg-[#F2F7F4] text-[#1E6B48] border-[#CFE4D8] font-medium'
+                    : 'bg-transparent border-[#E5E4DE] text-[#7A7870] hover:text-[#1F1E1D] hover:border-[#D8D6CD]'
+                }`}
+              >
+                <Lock className={`w-3 h-3 ${isPiiGuard ? 'text-[#1E6B48]' : 'text-[#A09D95]'}`} />
+                <span>PII Guard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsFaultInjected(!isFaultInjected)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
+                  isFaultInjected
+                    ? 'bg-[#FAF0EB] text-[#CC5A36] border-[#F0D4C8] font-medium'
+                    : 'bg-transparent border-[#E5E4DE] text-[#7A7870] hover:text-[#1F1E1D] hover:border-[#D8D6CD]'
+                }`}
+              >
+                <ShieldAlert className={`w-3 h-3 ${isFaultInjected ? 'text-[#CC5A36]' : 'text-[#A09D95]'}`} />
+                <span>Fault Injection</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowWeightsDrawer(!showWeightsDrawer)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
+                  showWeightsDrawer
+                    ? 'bg-[#F3F3EE] text-[#1F1E1D] border-[#D8D6CD] font-medium'
+                    : 'bg-transparent border-[#E5E4DE] text-[#7A7870] hover:text-[#1F1E1D] hover:border-[#D8D6CD]'
+                }`}
+              >
+                <Sliders className="w-3 h-3 text-[#A09D95]" />
+                <span>Weights</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTimeShift}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-[#7A7870] border border-[#E5E4DE] hover:text-[#1F1E1D] hover:border-[#D8D6CD] transition-colors cursor-pointer"
+              >
+                <FastForward className="w-3 h-3 text-[#A09D95]" />
+                <span>Time-shift</span>
+              </button>
             </div>
 
-            {/* Clean spacious monospace textarea */}
-            <div className="rounded-2xl bg-[#fafafa] border border-[#e5e5e7] p-3.5 focus-within:bg-white focus-within:border-[#1d1d1f] focus-within:ring-2 focus-within:ring-[#1d1d1f]/5 transition-all mb-4">
-              <textarea
-                rows={5}
-                value={customPrompt}
-                onChange={(e) => { setCustomPrompt(e.target.value); setActivePreset('custom'); }}
-                placeholder="Paste contract text or enter instructions..."
-                className="w-full resize-y font-mono text-xs text-[#1d1d1f] placeholder:text-[#86868b] leading-relaxed bg-transparent outline-none border-none min-h-[95px]"
-              />
-            </div>
+            {/* Run Button (Claude Terracotta Focal Accent) */}
+            <button
+              type="button"
+              onClick={handleRun}
+              disabled={isRunning}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-2xl bg-[#CC5A36] hover:bg-[#B84E2D] active:scale-[0.98] text-white text-xs font-medium transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            >
+              {isRunning ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <span>Evaluating routes…</span>
+                </>
+              ) : (
+                <>
+                  <span>Schedule & Execute</span>
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          </div>
 
-            {/* Attached Parameter Toolbar */}
-            <div className="pt-3.5 border-t border-[#f5f5f7] flex flex-wrap items-center justify-between gap-3">
-              {/* Apple-style pill toggles */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setIsUrgent(!isUrgent)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer border ${
-                    isUrgent
-                      ? 'bg-[#1d1d1f] text-white border-[#1d1d1f] shadow-xs'
-                      : 'bg-[#f5f5f7] border-[#e5e5e7] text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-[#ebebee] hover:border-[#d2d2d7]'
-                  }`}
-                >
-                  <Flame className={`w-3.5 h-3.5 ${isUrgent ? 'text-amber-400' : 'text-amber-600'}`} />
-                  <span>Urgent Priority</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsPiiGuard(!isPiiGuard)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer border ${
-                    isPiiGuard
-                      ? 'bg-[#1d1d1f] text-white border-[#1d1d1f] shadow-xs'
-                      : 'bg-[#f5f5f7] border-[#e5e5e7] text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-[#ebebee] hover:border-[#d2d2d7]'
-                  }`}
-                >
-                  <Lock className={`w-3.5 h-3.5 ${isPiiGuard ? 'text-emerald-400' : 'text-emerald-600'}`} />
-                  <span>PII Guard Active</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsFaultInjected(!isFaultInjected)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer border ${
-                    isFaultInjected
-                      ? 'bg-[#1d1d1f] text-white border-[#1d1d1f] shadow-xs'
-                      : 'bg-[#f5f5f7] border-[#e5e5e7] text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-[#ebebee] hover:border-[#d2d2d7]'
-                  }`}
-                >
-                  <ShieldAlert className={`w-3.5 h-3.5 ${isFaultInjected ? 'text-rose-400' : 'text-rose-600'}`} />
-                  <span>Fault Arming</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowWeightsDrawer(!showWeightsDrawer)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer border ${
-                    showWeightsDrawer
-                      ? 'bg-[#e5e5e7] border-[#d2d2d7] text-[#1d1d1f]'
-                      : 'bg-[#f5f5f7] border-[#e5e5e7] text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-[#ebebee] hover:border-[#d2d2d7]'
-                  }`}
-                >
-                  <Sliders className="w-3.5 h-3.5 text-[#1d1d1f]" />
-                  <span>Weights</span>
-                </button>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTimeShift}
-                  className="border-[#e5e5e7] hover:border-[#d2d2d7] text-[#1d1d1f]"
-                >
-                  <FastForward className="w-3.5 h-3.5 mr-1 text-[#6e6e73]" />
-                  Time-shift
-                </Button>
-
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleRun}
-                  loading={isRunning}
-                  className="shadow-sm font-semibold px-5"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current mr-1.5" />
-                  Run Pipeline
-                </Button>
-              </div>
-            </div>
-
-            {/* Weights Drawer */}
-            {showWeightsDrawer && (
-              <div className="mt-4 pt-4 border-t border-[#f5f5f7] grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-                {(Object.keys(weights) as (keyof Weights)[]).map((k) => (
-                  <div key={k} className="flex flex-col gap-1.5 bg-[#fbfbfd] p-2.5 rounded-xl border border-[#e5e5e7]">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-[#6e6e73] capitalize font-medium">{k}</span>
-                      <span className="font-mono font-bold text-[#1d1d1f]">{weights[k].toFixed(2)}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={weights[k]}
-                      onChange={(e) => setWeights({ ...weights, [k]: parseFloat(e.target.value) })}
-                      className="w-full"
-                    />
+          {/* Delicate Weights Drawer */}
+          {showWeightsDrawer && (
+            <div className="mt-4 pt-4 border-t border-[#F3F3EE] grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {(Object.keys(weights) as (keyof Weights)[]).map((k) => (
+                <div key={k} className="flex flex-col gap-1 p-2 bg-[#FAF9F5] rounded-xl border border-[#E5E4DE]">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-[#6B6862] capitalize">{k}</span>
+                    <span className="font-mono-claude font-medium text-[#1F1E1D]">{weights[k].toFixed(2)}</span>
                   </div>
-                ))}
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={weights[k]}
+                    onChange={(e) => setWeights({ ...weights, [k]: parseFloat(e.target.value) })}
+                    className="w-full mt-1"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Error Notice */}
+        {runError && (
+          <div className="mt-4 p-3 bg-[#FAF0EB] border border-[#F0D4C8] rounded-2xl text-xs text-[#CC5A36] flex items-center gap-2 max-w-lg">
+            <AlertCircle className="w-4 h-4 shrink-0 text-[#CC5A36]" />
+            <span>{runError}</span>
+          </div>
+        )}
+
+        {/* ── SECTION: Unhurried Results & Schedule ──────────────────────────── */}
+        {subtasks.length > 0 && (
+          <div ref={resultsRef} className="w-full mt-16 pt-12 border-t border-[#E5E4DE] space-y-10">
+            
+            {/* Calm Editorial Savings Banner */}
+            {baselines?.measured_summary && (
+              <div className="bg-[#FFFFFF] border border-[#E5E4DE] rounded-3xl p-6 sm:p-7 shadow-[0_2px_16px_rgba(0,0,0,0.02)]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-serif-claude text-xs text-[#7A7870] uppercase tracking-wider">
+                    Measured Benchmark Savings (Offline N=60)
+                  </span>
+                  <span className="text-[11px] text-[#A09D95] font-light">
+                    vs Always-Strongest (GPT-4o)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-3 border-t border-[#F3F3EE]">
+                  <div>
+                    <div className="text-2xl sm:text-3xl font-serif-claude text-[#1F1E1D] font-normal">
+                      +{baselines.measured_summary.cost_saved_pct.toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-[#7A7870] mt-0.5">Cost reduction ($0.092 vs $0.026)</div>
+                  </div>
+
+                  <div>
+                    <div className="text-2xl sm:text-3xl font-serif-claude text-[#1E6B48] font-normal">
+                      +{baselines.measured_summary.carbon_saved_pct.toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-[#7A7870] mt-0.5">Carbon reduction (EcoLogits + CodeCarbon)</div>
+                  </div>
+
+                  <div>
+                    <div className="text-2xl sm:text-3xl font-serif-claude text-[#1F1E1D] font-normal">
+                      {baselines.measured_summary.quality_retained_pct.toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-[#7A7870] mt-0.5">Quality retained per gold rubrics</div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-[#A09D95] mt-4 font-light italic">
+                  Scheduler overhead (Jev routing calls, nomic embeddings, cascade verification) is included in all totals per Invariant 7.
+                </p>
               </div>
             )}
-          </div>
 
-          {/* Error Message */}
-          {runError && (
-            <div className="mt-4 p-3 bg-[#fff1f2] border border-[#fecdd3] rounded-2xl text-xs text-[#9f1239] flex items-center gap-2 max-w-lg">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-[#be123c]" />
-              <span>{runError}</span>
-            </div>
-          )}
-
-          {/* Scroll cue if results ready */}
-          {subtasks.length > 0 && (
-            <button
-              onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="mt-8 text-xs text-[#6e6e73] hover:text-[#1d1d1f] flex items-center gap-1 transition-colors cursor-pointer px-3 py-1.5 rounded-full bg-white border border-[#e5e5e7] shadow-xs"
-            >
-              <span>View execution results</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </CenterFlow>
-      </section>
-
-      {/* ── SECTION 2: Results (Revealed on Scroll or Post-Run) ──────────────── */}
-      {subtasks.length > 0 && (
-        <section ref={resultsRef} className="max-w-7xl mx-auto w-full px-6 py-12 border-t border-[#e5e5e7]">
-          {/* 2a. Headline Metrics Band */}
-          {baselines?.measured_summary && (
-            <div className="mb-10">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-semibold text-[#86868b] uppercase tracking-wider">
-                  Measured Performance vs Always-Strongest (Baseline A)
-                </span>
-                <Badge variant="subtle" size="sm">
-                  Measured Offline N=60
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {/* Cost Saved */}
-                <Card className="p-6 shadow-xs border-[#e5e5e7]">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold uppercase text-[#6e6e73] tracking-wider">Cost Saved</span>
-                    <Badge variant="subtle" size="sm">Baseline comparison</Badge>
-                  </div>
-                  <div className="text-4xl font-bold tracking-tight text-[#1d1d1f] mb-1">
-                    +{baselines.measured_summary.cost_saved_pct.toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-[#86868b]">vs Always-strongest ($0.092 vs $0.026)</div>
-                </Card>
-
-                {/* Carbon Saved */}
-                <Card className="p-6 shadow-xs border-[#e5e5e7]">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold uppercase text-[#6e6e73] tracking-wider">Carbon Saved</span>
-                    <Badge variant="local" size="sm">EcoLogits · CodeCarbon</Badge>
-                  </div>
-                  <div className="text-4xl font-bold tracking-tight text-emerald-700 mb-1">
-                    +{baselines.measured_summary.carbon_saved_pct.toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-[#86868b]">Hardware measured & cloud telemetry</div>
-                </Card>
-
-                {/* Quality Retained */}
-                <Card className="p-6 shadow-xs border-[#e5e5e7]">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold uppercase text-[#6e6e73] tracking-wider">Quality Retained</span>
-                    <Badge variant="dark" size="sm">Zero Compromise</Badge>
-                  </div>
-                  <div className="text-4xl font-bold tracking-tight text-[#1d1d1f] mb-1">
-                    {baselines.measured_summary.quality_retained_pct.toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-[#86868b]">per rubric & benchmark accuracy tiers</div>
-                </Card>
-              </div>
-            </div>
-          )}
-
-          {/* 2b & 2c: Subtask Pipeline + Route Inspector */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-12">
-            {/* Left 7 cols: Subtask Pipeline (Vertical list) */}
-            <div className="lg:col-span-7 flex flex-col gap-3.5">
-              <div className="flex items-center justify-between pb-2 mb-1">
-                <h2 className="text-sm font-semibold text-[#1d1d1f]">Subtasks ({subtasks.length})</h2>
-                <span className="text-xs text-[#86868b]">
+            {/* Subtasks Sequence (Conversational Flow) */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="font-serif-claude text-lg text-[#1F1E1D] font-normal">
+                  Scheduled Pipeline ({subtasks.length} subtasks)
+                </h2>
+                <span className="text-xs text-[#A09D95]">
                   {subtasks.filter(s => s.status === 'done').length} of {subtasks.length} completed
                 </span>
               </div>
 
               {subtasks.map((st, i) => {
-                const isSelected = st.id === selectedId;
+                const isExpanded = expandedSubtaskId === st.id;
                 const esc = escalations.find(e => e.subtask_id === st.id);
                 const isPii = st.pii_class === 'raw_pii';
+                const candidates = candidatesMap[st.id] ?? [];
 
                 return (
                   <div
                     key={st.id}
-                    onClick={() => setSelectedId(st.id)}
-                    className={`p-4 sm:p-5 rounded-2xl border transition-all duration-150 cursor-pointer text-left ${
-                      isSelected
-                        ? 'bg-white border-[#1d1d1f] shadow-sm ring-1 ring-[#1d1d1f]'
-                        : 'bg-white border-[#e5e5e7] hover:border-[#d2d2d7]'
-                    }`}
+                    className="bg-[#FFFFFF] border border-[#E5E4DE] rounded-2xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] transition-all hover:border-[#D8D6CD]"
                   >
-                    {/* Primary Line: Step number + Description + Status */}
-                    <div className="flex items-start justify-between gap-3 mb-2.5">
+                    {/* Top Row: Step Index + Title + Status */}
+                    <div className="flex items-start justify-between gap-4 mb-2">
                       <div className="flex items-start gap-3">
-                        <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
-                          isSelected ? 'bg-[#1d1d1f] text-white' : 'bg-[#f5f5f7] text-[#6e6e73]'
-                        }`}>
-                          {i + 1}
+                        <span className="font-mono-claude text-xs text-[#A09D95] mt-0.5 shrink-0">
+                          {String(i + 1).padStart(2, '0')}.
                         </span>
-                        <span className="text-sm font-semibold text-[#1d1d1f] leading-snug">
+                        <h3 className="text-sm text-[#1F1E1D] font-medium leading-relaxed">
                           {st.description}
-                        </span>
+                        </h3>
                       </div>
 
-                      <Badge
-                        variant={st.status === 'done' ? 'success' : st.status === 'failed' ? 'warning' : 'neutral'}
-                        size="sm"
-                      >
-                        {st.status === 'done' && <Check className="w-3 h-3 text-emerald-600" />}
-                        {st.status}
-                      </Badge>
+                      <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                        st.status === 'done'
+                          ? 'bg-[#F2F7F4] text-[#1E6B48]'
+                          : st.status === 'failed'
+                          ? 'bg-[#FAF0EB] text-[#CC5A36]'
+                          : 'bg-[#F3F3EE] text-[#7A7870]'
+                      }`}>
+                        {st.status === 'done' && <Check className="w-3 h-3 text-[#1E6B48]" />}
+                        <span>{st.status}</span>
+                      </span>
                     </div>
 
-                    {/* Secondary Line: Model routed + location icon */}
-                    <div className="flex items-center gap-2 text-xs text-[#6e6e73] ml-9 mb-2.5 flex-wrap">
+                    {/* Middle Row: Model Route + Badges */}
+                    <div className="flex items-center gap-2 text-xs text-[#6B6862] ml-7 mb-3 flex-wrap">
                       {st.routed_model ? (
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f5f5f7] border border-[#e5e5e7] font-mono text-xs font-medium text-[#1d1d1f]">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF9F5] border border-[#E5E4DE] font-mono-claude text-xs text-[#1F1E1D]">
                           {st.routed_location === 'local' ? (
-                            <HardDrive className="w-3.5 h-3.5 text-emerald-600" />
+                            <HardDrive className="w-3.5 h-3.5 text-[#1E6B48]" />
                           ) : (
-                            <Cloud className="w-3.5 h-3.5 text-blue-600" />
+                            <Cloud className="w-3.5 h-3.5 text-[#4A6B82]" />
                           )}
                           <span>{st.routed_model}</span>
-                          <span className={`px-1.5 py-0.2 rounded text-[10px] font-sans font-medium uppercase tracking-wide ${
-                            st.routed_location === 'local' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {st.routed_location}
-                          </span>
+                          <span className="text-[10px] text-[#A09D95] uppercase">({st.routed_location})</span>
                         </div>
                       ) : (
-                        <span className="text-[#86868b] italic">Pending route...</span>
+                        <span className="text-[#A09D95] italic">Route pending…</span>
                       )}
 
                       {/* Escalation transition */}
                       {esc && (
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 text-xs font-medium border border-amber-200">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#FAF0EB] text-[#CC5A36] text-[11px]">
                           <span>{esc.from_model}</span>
-                          <ArrowRight className="w-3 h-3 text-amber-700" />
+                          <span>→</span>
                           <span className="font-semibold">{esc.to_model}</span>
-                          <span className="text-[10px] text-amber-700">({esc.reason_code})</span>
+                          <span className="text-[10px] opacity-80">({esc.reason_code})</span>
                         </div>
                       )}
 
                       {Boolean(st.degraded_routing) && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 text-[11px] font-medium border border-amber-300 shadow-xs">
-                          <Zap className="w-3 h-3 text-amber-600 fill-amber-500" />
-                          Offline Fallback
-                        </span>
-                      )}
-
-                      {Boolean(st.needs_reconciliation) && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-800 text-[11px] font-medium border border-zinc-300 shadow-xs">
-                          <RefreshCw className="w-3 h-3 text-zinc-600" />
-                          Needs Recon
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#FAF6ED] text-[#8C5D14] text-[11px]">
+                          Offline fallback
                         </span>
                       )}
 
                       {isPii && (
-                        <Badge variant="warning" size="sm">
-                          <Lock className="w-3 h-3 text-amber-700" />
-                          Forced local (PII)
-                        </Badge>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#FAF6ED] text-[#8C5D14] text-[11px]">
+                          <Lock className="w-3 h-3 text-[#8C5D14]" />
+                          PII Isolated (Local)
+                        </span>
                       )}
                     </div>
 
-                    {/* Tertiary Line: Telemetry chips */}
-                    <div className="flex items-center gap-2 text-[11px] font-mono text-[#86868b] ml-9 flex-wrap">
-                      <span className="px-2 py-0.5 rounded bg-[#f5f5f7] border border-[#e5e5e7] text-[#6e6e73] font-sans font-medium">
-                        Tier: {st.complexity_tier}
-                      </span>
-                      {st.actual_latency_ms !== null && (
-                        <span className="px-2 py-0.5 rounded bg-[#f5f5f7] border border-[#e5e5e7] text-[#1d1d1f]">
-                          ⏱ {(st.actual_latency_ms / 1000).toFixed(1)}s
-                        </span>
-                      )}
-                      {st.actual_cost_usd !== null && (
-                        <span className="px-2 py-0.5 rounded bg-[#f5f5f7] border border-[#e5e5e7] text-[#1d1d1f]">
-                          💵 ${st.actual_cost_usd.toFixed(5)}
-                        </span>
-                      )}
-                      {st.actual_carbon_kgco2eq !== null && (
-                        <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium">
-                          🌱 {(st.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂
-                        </span>
-                      )}
-                      {st.verification_pass !== null && (
-                        <span className={`px-2 py-0.5 rounded border font-medium ${
-                          st.verification_pass
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                            : 'bg-rose-50 border-rose-200 text-rose-800'
-                        }`}>
-                          {st.verification_pass ? '✓ Verified' : '✗ Unverified'}
-                        </span>
-                      )}
+                    {/* Bottom Row: Telemetry chips + Toggle Inspector */}
+                    <div className="flex items-center justify-between pt-2.5 border-t border-[#F3F3EE] text-[11px] font-mono-claude text-[#7A7870] ml-7 flex-wrap gap-2">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-[#A09D95]">tier: {st.complexity_tier}</span>
+                        {st.actual_latency_ms !== null && (
+                          <span>{(st.actual_latency_ms / 1000).toFixed(1)}s</span>
+                        )}
+                        {st.actual_cost_usd !== null && (
+                          <span>${st.actual_cost_usd.toFixed(5)}</span>
+                        )}
+                        {st.actual_carbon_kgco2eq !== null && (
+                          <span className="text-[#1E6B48]">
+                            {(st.actual_carbon_kgco2eq * 1000).toFixed(3)}g CO₂
+                          </span>
+                        )}
+                        {st.verification_pass !== null && (
+                          <span className={st.verification_pass ? 'text-[#1E6B48]' : 'text-[#CC5A36]'}>
+                            {st.verification_pass ? '✓ Verified' : '✗ Failed'}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleInspect(st)}
+                        className="inline-flex items-center gap-1 text-xs text-[#7A7870] hover:text-[#1F1E1D] transition-colors cursor-pointer"
+                      >
+                        <span>{isExpanded ? 'Hide scoring' : 'Inspect scoring'}</span>
+                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
                     </div>
+
+                    {/* Inline Route Inspector Drawer */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-[#E5E4DE] bg-[#FAF9F5] rounded-xl p-4 ml-7 text-xs">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="font-serif-claude text-xs text-[#7A7870] uppercase tracking-wider">
+                            Five-Factor Candidate Scoring
+                          </span>
+                          {st.jev_confidence !== null && (
+                            <span className="font-mono-claude text-[11px] text-[#A09D95]">
+                              Jev confidence: {(st.jev_confidence * 100).toFixed(0)}% (bonus: {(st.jev_confidence * 0.02).toFixed(3)})
+                            </span>
+                          )}
+                        </div>
+
+                        {candidates.length === 0 ? (
+                          <div className="text-center py-4 text-[#A09D95] text-xs">
+                            Evaluating candidates…
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {candidates.map((c) => (
+                              <div
+                                key={c.model_id}
+                                className={`p-3 rounded-xl border transition-all ${
+                                  c.is_winner
+                                    ? 'bg-[#FFFFFF] border-[#1F1E1D] shadow-xs'
+                                    : 'bg-transparent border-[#E5E4DE] opacity-75'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1.5 font-mono-claude text-xs">
+                                  <div className="flex items-center gap-2">
+                                    {c.is_winner && (
+                                      <span className="text-[#CC5A36] text-[10px] font-bold uppercase tracking-wider">
+                                        ✓ Selected
+                                      </span>
+                                    )}
+                                    <span className="font-semibold text-[#1F1E1D]">{c.model_id}</span>
+                                    <span className="text-[#A09D95] text-[10px]">({c.location})</span>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <span className="text-[#1F1E1D] font-bold">{c.final_score.toFixed(3)}</span>
+                                    {c.jev_bonus > 0 && (
+                                      <span className="text-[10px] text-[#1E6B48] ml-1">
+                                        (−{c.jev_bonus.toFixed(3)} Jev)
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Monochromatic Factor Bar */}
+                                <div className="w-full h-1.5 bg-[#E5E4DE] rounded-full overflow-hidden flex my-2">
+                                  <div style={{ width: `${c.lat_norm * 25}%` }} className="bg-[#1F1E1D] h-full" title="Latency (25%)" />
+                                  <div style={{ width: `${c.acc_norm * 35}%` }} className="bg-[#6B6862] h-full" title="Accuracy penalty (35%)" />
+                                  <div style={{ width: `${c.cost_norm * 15}%` }} className="bg-[#A09D95] h-full" title="Cost (15%)" />
+                                  <div style={{ width: `${c.energy_norm * 10}%` }} className="bg-[#1E6B48] h-full" title="Energy (10%)" />
+                                  <div style={{ width: `${c.carbon_norm * 15}%` }} className="bg-[#2D8A5E] h-full" title="Carbon (15%)" />
+                                </div>
+
+                                <div className="flex justify-between text-[10px] text-[#A09D95] font-mono-claude">
+                                  <span>Accuracy tier: {c.accuracy_tier.toFixed(2)}</span>
+                                  <span>Est: {(c.predicted_latency_ms / 1000).toFixed(1)}s · ${c.predicted_cost_usd.toFixed(4)}</span>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Legend */}
+                            <div className="flex items-center justify-between text-[10px] text-[#A09D95] pt-2 flex-wrap gap-1">
+                              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#1F1E1D]" /> Latency (25%)</span>
+                              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#6B6862]" /> Accuracy (35%)</span>
+                              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#A09D95]" /> Cost (15%)</span>
+                              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#1E6B48]" /> Energy (10%)</span>
+                              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#2D8A5E]" /> Carbon (15%)</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Right 5 cols: Route Inspector & Five-Factor Breakdown */}
-            <div className="lg:col-span-5 sticky top-20">
-              <Card className="p-6 shadow-sm border-[#e5e5e7]">
-                <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-[#f5f5f7]">
+            {/* Grid Intensity Simulated Forecast (Quiet Hairline Accordion) */}
+            {grid && (
+              <div className="bg-[#FFFFFF] border border-[#E5E4DE] rounded-3xl p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#1d1d1f]">Route Inspector</h3>
-                    <p className="text-[11px] text-[#86868b]">Five-Factor Scoring Telemetry · Deterministic Formula</p>
+                    <span className="font-serif-claude text-xs text-[#7A7870] uppercase tracking-wider block">
+                      Grid Carbon Intensity ({grid.zone})
+                    </span>
+                    <span className="text-2xl font-serif-claude text-[#1F1E1D]">
+                      {grid.current_intensity_gco2_per_kwh} <span className="text-xs font-sans text-[#7A7870]">gCO₂/kWh</span>
+                    </span>
                   </div>
-                  {selectedSt && (
-                    <Badge variant={selectedSt.pii_class === 'raw_pii' ? 'warning' : 'subtle'} size="sm">
-                      {selectedSt.pii_class === 'raw_pii' ? 'PII isolated' : 'Evaluation'}
-                    </Badge>
-                  )}
+                  <span className="text-[11px] text-[#A09D95] italic border border-dashed border-[#D8D6CD] px-2.5 py-1 rounded-full">
+                    Grey-dashed: Simulated forecast
+                  </span>
                 </div>
 
-                {selectedSt ? (
-                  <div className="space-y-4">
-                    {/* Selected node summary */}
-                    <div className="bg-[#f5f5f7] p-3.5 rounded-2xl border border-[#e5e5e7]">
-                      <div className="text-xs font-semibold text-[#1d1d1f] mb-1.5">
-                        {selectedSt.description}
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-[#6e6e73]">
-                        <span>Complexity: <strong className="text-[#1d1d1f] uppercase">{selectedSt.complexity_tier}</strong></span>
-                        {selectedSt.jev_confidence !== null && (
-                          <span className="font-mono">Jev guidance: <strong className="text-[#1d1d1f]">{(selectedSt.jev_confidence * 100).toFixed(0)}%</strong></span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Candidates ranking list */}
-                    <div className="space-y-2.5">
-                      <div className="text-[11px] font-semibold uppercase text-[#86868b] tracking-wider">
-                        Candidate Scoring
-                      </div>
-
-                      {inspectorCandidates.map((c) => (
+                <div className="flex items-end gap-2 h-16 pt-2">
+                  {grid.simulated_forecast.map((f, idx) => {
+                    const maxI = Math.max(...grid.simulated_forecast.map(x => x.intensityGco2));
+                    const minI = Math.min(...grid.simulated_forecast.map(x => x.intensityGco2));
+                    const isValley = f.intensityGco2 === minI;
+                    const pct = (f.intensityGco2 / maxI) * 100;
+                    return (
+                      <div key={idx} className="flex-1 flex flex-col items-center">
                         <div
-                          key={c.model_id}
-                          className={`p-3.5 rounded-2xl border text-xs transition-all ${
-                            c.is_winner
-                              ? 'bg-zinc-50 border-2 border-[#1d1d1f] shadow-xs'
-                              : 'bg-white border-[#e5e5e7] opacity-70 hover:opacity-100'
+                          style={{ height: `${pct}%` }}
+                          className={`w-full rounded-t-sm border-t border-dashed transition-all ${
+                            isValley ? 'bg-[#1F1E1D] border-[#1F1E1D]' : 'bg-[#E5E4DE] border-[#A09D95]'
                           }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              {c.is_winner ? (
-                                <Badge variant="dark" size="sm">
-                                  ✓ Selected
-                                </Badge>
-                              ) : (
-                                <span className="font-mono text-xs text-[#86868b]">#{inspectorCandidates.indexOf(c) + 1}</span>
-                              )}
-                              <span className="font-mono font-bold text-[#1d1d1f]">{c.model_id}</span>
-                              <span className="text-[#86868b] text-[10px] font-sans uppercase">({c.location})</span>
-                            </div>
-                            <div className="font-mono text-xs">
-                              {c.jev_bonus > 0 ? (
-                                <>
-                                  <span className="text-[#86868b]">{c.raw_score.toFixed(3)}</span>
-                                  <span className="text-emerald-700 font-medium ml-1">−{c.jev_bonus.toFixed(3)} Jev</span>
-                                  <span className="font-bold text-[#1d1d1f] ml-1.5">= {c.final_score.toFixed(3)}</span>
-                                </>
-                              ) : (
-                                <span className="font-bold text-[#1d1d1f]">Score: {c.final_score.toFixed(3)}</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Monochrome Stacked Score Bar */}
-                          <div className="w-full h-2 bg-[#f0f0f3] rounded-full overflow-hidden flex my-2.5 border border-[#e5e5e7]">
-                            <div style={{ width: `${c.lat_norm * 25}%` }} className="bg-[#18181b] h-full" title="Latency (25%)" />
-                            <div style={{ width: `${c.acc_norm * 35}%` }} className="bg-[#4b5563] h-full" title="Accuracy penalty (35%)" />
-                            <div style={{ width: `${c.cost_norm * 15}%` }} className="bg-[#9ca3af] h-full" title="Cost (15%)" />
-                            <div style={{ width: `${c.energy_norm * 10}%` }} className="bg-[#059669] h-full" title="Energy (10%)" />
-                            <div style={{ width: `${c.carbon_norm * 15}%` }} className="bg-[#34d399] h-full" title="Carbon (15%)" />
-                          </div>
-
-                          <div className="flex justify-between text-[11px] font-mono text-[#86868b]">
-                            <span>Accuracy tier: <strong className="text-[#1d1d1f]">{c.accuracy_tier.toFixed(2)}</strong></span>
-                            <span>{c.is_winner ? 'Rank #1 Winner' : `Delta: +${(c.final_score - inspectorCandidates[0]?.final_score).toFixed(3)}`}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Legend */}
-                    <div className="flex items-center justify-between text-[10px] text-[#86868b] pt-2.5 border-t border-[#f5f5f7] flex-wrap gap-1">
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-xs bg-[#18181b]" /> Latency (25%)</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-xs bg-[#4b5563]" /> Accuracy (35%)</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-xs bg-[#9ca3af]" /> Cost (15%)</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-xs bg-[#059669]" /> Energy (10%)</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-xs bg-[#34d399]" /> Carbon (15%)</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-[#86868b] text-xs">
-                    Select a subtask on the left to inspect its routing metrics.
-                  </div>
-                )}
-              </Card>
-            </div>
-          </div>
-
-          {/* 2e. Run Stats & Details (Progressive Disclosure) */}
-          <div className="pt-6 border-t border-[#e5e5e7]">
-            <button
-              onClick={() => setShowDetailsSection(!showDetailsSection)}
-              className="w-full flex items-center justify-between p-4 rounded-2xl bg-white border border-[#e5e5e7] hover:border-[#d2d2d7] text-xs font-semibold text-[#1d1d1f] uppercase tracking-wider transition-all cursor-pointer shadow-xs"
-            >
-              <span className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-[#6e6e73]" />
-                <span>Budgets, Telemetry & Policy Comparisons</span>
-              </span>
-              <div className="flex items-center gap-1.5 text-xs text-[#86868b] font-normal normal-case">
-                <span>{showDetailsSection ? 'Hide details' : 'Show details'}</span>
-                {showDetailsSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </div>
-            </button>
-
-            {showDetailsSection && (
-              <div className="mt-6 space-y-6">
-                {/* Live Task Budget Limits */}
-                {currentTask && (
-                  <Card className="p-6 shadow-xs border-[#e5e5e7]">
-                    <div className="text-xs font-bold uppercase text-[#1d1d1f] tracking-wider mb-4">
-                      Execution Budget Consumption
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* Cost */}
-                      <div className="bg-[#fbfbfd] p-4 rounded-2xl border border-[#e5e5e7]">
-                        <div className="flex justify-between text-xs font-mono mb-2">
-                          <span className="text-[#6e6e73]">Cost</span>
-                          <span className="font-semibold text-[#1d1d1f]">
-                            ${currentTask.running_cost_usd.toFixed(5)} / ${currentTask.max_total_cost_usd.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 bg-[#e5e5e7] rounded-full overflow-hidden">
-                          <div
-                            className="bg-[#1d1d1f] h-full transition-all duration-300"
-                            style={{ width: `${Math.min(100, (currentTask.running_cost_usd / currentTask.max_total_cost_usd) * 100)}%` }}
-                          />
-                        </div>
+                          title={`${f.intensityGco2} gCO₂/kWh`}
+                        />
+                        <span className="text-[10px] font-mono-claude text-[#A09D95] mt-1">
+                          {idx === 0 ? 'Now' : `+${f.hourOffset}h`}
+                        </span>
                       </div>
-
-                      {/* Carbon */}
-                      <div className="bg-[#fbfbfd] p-4 rounded-2xl border border-[#e5e5e7]">
-                        <div className="flex justify-between text-xs font-mono mb-2">
-                          <span className="text-[#6e6e73]">Carbon</span>
-                          <span className="font-semibold text-emerald-800">
-                            {(currentTask.running_carbon_kgco2eq * 1000).toFixed(3)}g / {(currentTask.max_total_carbon_kgco2eq * 1000).toFixed(0)}g
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 bg-[#e5e5e7] rounded-full overflow-hidden">
-                          <div
-                            className="bg-emerald-700 h-full transition-all duration-300"
-                            style={{ width: `${Math.min(100, (currentTask.running_carbon_kgco2eq / currentTask.max_total_carbon_kgco2eq) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Latency */}
-                      <div className="bg-[#fbfbfd] p-4 rounded-2xl border border-[#e5e5e7]">
-                        <div className="flex justify-between text-xs font-mono mb-2">
-                          <span className="text-[#6e6e73]">Latency</span>
-                          <span className="font-semibold text-[#1d1d1f]">
-                            {(currentTask.running_latency_ms / 1000).toFixed(1)}s / {(currentTask.max_total_latency_ms / 1000).toFixed(0)}s
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 bg-[#e5e5e7] rounded-full overflow-hidden">
-                          <div
-                            className="bg-[#1d1d1f] h-full transition-all duration-300"
-                            style={{ width: `${Math.min(100, (currentTask.running_latency_ms / currentTask.max_total_latency_ms) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {/* Policy Comparison from offline eval */}
-                {baselines?.offline_stats && (
-                  <Card className="p-6 shadow-xs border-[#e5e5e7]">
-                    <div className="text-xs font-bold uppercase text-[#1d1d1f] tracking-wider mb-4 flex items-center justify-between">
-                      <span>Offline Policy Comparison</span>
-                      <Badge variant="subtle" size="sm">N=60 Subtasks · Verified Eval</Badge>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {[
-                        {
-                          label: 'Total Cost',
-                          fmt: (v: number) => `$${v.toFixed(4)}`,
-                          data: [
-                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.cost.mean, col: '#d2d2d7' },
-                            { name: 'Random', val: baselines.offline_stats.random.cost.mean, col: '#86868b' },
-                            { name: 'This system', val: baselines.offline_stats.this_system.cost.mean, col: '#1d1d1f', overhead: true },
-                          ],
-                        },
-                        {
-                          label: 'Total Carbon',
-                          fmt: (v: number) => `${v.toFixed(5)} kg`,
-                          data: [
-                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.carbon.mean, col: '#d2d2d7' },
-                            { name: 'Random', val: baselines.offline_stats.random.carbon.mean, col: '#86868b' },
-                            { name: 'This system', val: baselines.offline_stats.this_system.carbon.mean, col: '#1d1d1f', overhead: true },
-                          ],
-                        },
-                        {
-                          label: 'Quality Retained',
-                          fmt: (v: number) => `${(v * 100).toFixed(1)}%`,
-                          data: [
-                            { name: 'Always-strongest', val: 1.0, col: '#d2d2d7' },
-                            { name: 'Random', val: baselines.offline_stats.random.quality.mean, col: '#86868b' },
-                            { name: 'This system', val: baselines.offline_stats.this_system.quality.mean, col: '#1d1d1f', overhead: false },
-                          ],
-                        },
-                      ].map((col) => {
-                        const maxVal = Math.max(...col.data.map(d => d.val)) || 1;
-                        return (
-                          <div key={col.label} className="space-y-3 bg-[#fbfbfd] p-4 rounded-2xl border border-[#e5e5e7]">
-                            <span className="text-xs font-semibold text-[#1d1d1f] uppercase tracking-wide">{col.label}</span>
-                            {col.data.map((d: any) => (
-                              <div key={d.name} className="space-y-1.5">
-                                <div className="flex justify-between text-xs font-mono">
-                                  <span className="text-[#6e6e73] font-sans">{d.name}</span>
-                                  <span className="font-semibold text-[#1d1d1f]">{col.fmt(d.val)}</span>
-                                </div>
-                                <div className="w-full h-2 bg-[#e5e5e7] rounded-full overflow-hidden flex">
-                                  <div
-                                    style={{
-                                      width: `${((d.val * (d.overhead ? 0.92 : 1)) / maxVal) * 100}%`,
-                                      backgroundColor: d.col,
-                                    }}
-                                    className="h-full"
-                                  />
-                                  {d.overhead && (
-                                    <div
-                                      style={{ width: `${((d.val * 0.08) / maxVal) * 100}%` }}
-                                      className="h-full bg-amber-500"
-                                      title="Scheduler overhead included (Invariant 7)"
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </Card>
-                )}
-
-                {/* Grid Intensity & Forecast */}
-                {grid && (
-                  <Card className="p-6 shadow-xs border-[#e5e5e7]">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <div className="text-xs font-bold uppercase text-[#1d1d1f] tracking-wider">
-                          Grid Carbon Intensity ({grid.zone})
-                        </div>
-                        <div className="text-3xl font-bold font-mono text-[#1d1d1f] mt-1">
-                          {grid.current_intensity_gco2_per_kwh} <span className="text-xs font-sans text-[#86868b] font-normal">gCO₂/kWh</span>
-                        </div>
-                      </div>
-                      <Badge variant="outline" size="sm">
-                        Simulated forecast
-                      </Badge>
-                    </div>
-
-                    <div className="border border-dashed border-[#d2d2d7] rounded-2xl p-5 bg-[#fbfbfd]">
-                      <div className="flex items-end gap-2.5 h-20">
-                        {grid.simulated_forecast.map((f, i) => {
-                          const maxI = Math.max(...grid.simulated_forecast.map(x => x.intensityGco2));
-                          const minI = Math.min(...grid.simulated_forecast.map(x => x.intensityGco2));
-                          const isValley = f.intensityGco2 === minI;
-                          const pct = (f.intensityGco2 / maxI) * 100;
-                          return (
-                            <div key={i} className="flex-1 flex flex-col items-center">
-                              <div
-                                title={`${f.intensityGco2} gCO₂/kWh`}
-                                style={{ height: `${pct}%` }}
-                                className={`w-full rounded-t-lg border-t border-dashed transition-all ${
-                                  isValley ? 'bg-[#1d1d1f] border-[#1d1d1f]' : 'bg-[#e5e5e7] border-[#b0b0b5]'
-                                }`}
-                              />
-                              <span className="text-[10px] font-mono text-[#86868b] mt-1.5">
-                                {i === 0 ? 'Now' : `+${f.hourOffset}h`}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-[#86868b] mt-3.5 italic">{grid.disclosure}</p>
-                    </div>
-                  </Card>
-                )}
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-[#A09D95] mt-3 font-light italic">{grid.disclosure}</p>
               </div>
             )}
-          </div>
 
-          {/* Methodology Footer */}
-          <footer className="mt-12 pt-6 pb-12 border-t border-[#e5e5e7] text-xs text-[#86868b] leading-relaxed">
-            <p className="mb-1">
-              <strong className="text-[#1d1d1f]">Methodology & Constraints:</strong> Headline savings numbers (cost −71.3%, carbon −59.0%) come from measured offline evaluations (N=60 subtasks).
-              All figures include scheduler overhead (Jev routing, embeddings, cascade verification) per Invariant 7.
-              Cloud carbon uses EcoLogits output as-is; grid intensity is never applied to cloud (Invariant 1).
-              Local carbon is calculated as CodeCarbon measured energy × live {grid?.zone ?? 'IN-SO'} grid intensity.
-              PII subtasks are strictly isolated to local models (Invariant 2).
-              Simulated grid forecast is clearly labeled and visually distinct (Invariant 6).
-            </p>
-          </footer>
-        </section>
-      )}
+            {/* Methodology & Integrity Disclosures */}
+            <footer className="pt-8 border-t border-[#E5E4DE]/60 text-xs text-[#7A7870] leading-relaxed font-light">
+              <p>
+                <strong className="text-[#1F1E1D] font-normal">Methodological Integrity:</strong> Headline savings numbers (−71.3% cost, −59.0% carbon) come from measured offline evaluations (N=60 subtasks) per Invariant 9.
+                All figures include scheduler overhead (decomposer, Jev routing, local embeddings, cascade verification) per Invariant 7.
+                Cloud carbon is reported using EcoLogits output as-is without grid multiplication (Invariant 1).
+                Local carbon is measured energy × live {grid?.zone ?? 'IN-SO'} grid intensity.
+                PII subtasks are strictly isolated to local models (Invariant 2).
+              </p>
+            </footer>
+          </div>
+        )}
+      </main>
 
       {/* ── Time-shift Batch Modal ───────────────────────────────────────────── */}
       {showTimeShift && timeShiftData && (
-        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#e5e5e7] rounded-3xl max-w-md w-full p-6 shadow-xl">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f5f5f7]">
-              <h3 className="text-sm font-semibold tracking-tight text-[#1d1d1f]">
+        <div className="fixed inset-0 z-50 bg-[#1F1E1D]/20 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FFFFFF] border border-[#E5E4DE] rounded-3xl max-w-md w-full p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#F3F3EE]">
+              <h3 className="font-serif-claude text-base text-[#1F1E1D] font-medium">
                 Time-Shift Batch Dispatcher
               </h3>
               <button
                 onClick={() => setShowTimeShift(false)}
-                className="text-[#86868b] hover:text-[#1d1d1f] transition-colors"
+                className="text-[#A09D95] hover:text-[#1F1E1D] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-3 text-xs text-[#6B6862]">
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-[#f5f5f7] p-3 rounded-xl">
-                  <span className="text-[#86868b] block text-[10px] uppercase">Intensity Now</span>
-                  <span className="text-[#1d1d1f] font-semibold font-mono text-sm">{timeShiftData.intensity_now_gco2} gCO₂/kWh</span>
+                <div className="bg-[#FAF9F5] p-3 rounded-xl border border-[#E5E4DE]">
+                  <span className="text-[#A09D95] block text-[10px] uppercase">Intensity Now</span>
+                  <span className="text-[#1F1E1D] font-mono-claude font-semibold text-sm">
+                    {timeShiftData.intensity_now_gco2} gCO₂/kWh
+                  </span>
                 </div>
-                <div className="bg-[#f5f5f7] p-3 rounded-xl">
-                  <span className="text-[#86868b] block text-[10px] uppercase">Forecast Valley (+3h)</span>
-                  <span className="text-[#1d1d1f] font-semibold font-mono text-sm">{timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh</span>
+                <div className="bg-[#FAF9F5] p-3 rounded-xl border border-[#E5E4DE]">
+                  <span className="text-[#A09D95] block text-[10px] uppercase">Forecast Valley (+3h)</span>
+                  <span className="text-[#1E6B48] font-mono-claude font-semibold text-sm">
+                    {timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh
+                  </span>
                 </div>
               </div>
 
-              <div className="bg-[#f5f5f7] p-3 rounded-xl flex items-center justify-between">
-                <span className="text-[#6e6e73]">Threshold difference:</span>
-                <span className="font-semibold text-[#1d1d1f]">
+              <div className="bg-[#FAF9F5] p-3 rounded-xl border border-[#E5E4DE] flex items-center justify-between">
+                <span>Threshold comparison:</span>
+                <span className="font-semibold text-[#1F1E1D]">
                   {timeShiftData.difference_pct}% &gt; {timeShiftData.threshold_pct}% threshold
                 </span>
               </div>
 
-              <div className="bg-[#1d1d1f] text-white p-4 rounded-xl">
-                <div className="font-semibold mb-1 flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5" />
-                  Action: {timeShiftData.action}
+              <div className="bg-[#FAF9F5] border border-[#E5E4DE] p-4 rounded-xl">
+                <div className="font-medium text-[#1F1E1D] mb-1 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-[#1E6B48]" />
+                  <span>Action: {timeShiftData.action}</span>
                 </div>
-                <p className="text-[11px] text-[#d2d2d7] leading-relaxed">
+                <p className="text-[11px] text-[#6B6862] leading-relaxed">
                   Scheduled for green window (+{timeShiftData.scheduled_for_offset_hours} hours).
-                  Projected carbon saved: <strong>{timeShiftData.carbon_savings_projected_pct}%</strong>.
+                  Projected carbon saved: <strong className="text-[#1E6B48]">{timeShiftData.carbon_savings_projected_pct}%</strong>.
                 </p>
-                <p className="text-[10px] text-[#86868b] mt-1.5">
-                  Rule: {timeShiftData.eligible_candidates}
+                <p className="text-[10px] text-[#A09D95] mt-1">
+                  Rule: {timeShiftData.eligible_candidates} (local candidates only per Invariant 8).
                 </p>
               </div>
             </div>
 
-            <Button
-              variant="primary"
-              size="md"
-              className="w-full mt-4"
+            <button
               onClick={() => setShowTimeShift(false)}
+              className="w-full mt-5 py-2 px-4 rounded-xl bg-[#1F1E1D] text-white text-xs font-medium hover:bg-[#383735] transition-colors cursor-pointer"
             >
               Close
-            </Button>
+            </button>
           </div>
         </div>
       )}
-      {/* ── Modal: Reconciliation Audit Log ─────────────────────────────────── */}
+
+      {/* ── Reconciliation Audit Log Modal ─────────────────────────────────── */}
       {showReconciliationModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-[#e5e5e7] shadow-2xl max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f5f5f7]">
+        <div className="fixed inset-0 z-50 bg-[#1F1E1D]/20 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FFFFFF] border border-[#E5E4DE] rounded-3xl max-w-lg w-full p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#F3F3EE]">
               <div>
-                <h3 className="text-sm font-semibold text-[#1d1d1f]">Reconciliation Audit Log</h3>
-                <p className="text-[11px] text-[#86868b]">Post-reconnect audit comparing offline routing vs optimal online schedule.</p>
+                <h3 className="font-serif-claude text-base text-[#1F1E1D] font-medium">Reconciliation Audit Log</h3>
+                <p className="text-[11px] text-[#A09D95]">Audit comparing offline execution vs counterfactual online schedule.</p>
               </div>
               <button
                 onClick={() => setShowReconciliationModal(false)}
-                className="text-[#86868b] hover:text-[#1d1d1f] transition-colors"
+                className="text-[#A09D95] hover:text-[#1F1E1D] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1118,46 +958,42 @@ export default function EcoRouterApplePage() {
 
             <div className="space-y-2 text-xs overflow-y-auto flex-1 pr-1">
               {reconciliationLogs.length === 0 ? (
-                <div className="text-center py-8 text-[#86868b]">
+                <div className="text-center py-8 text-[#A09D95]">
                   No degraded subtasks recorded. All executions used optimal online routing.
                 </div>
               ) : (
                 reconciliationLogs.map((log: any) => (
-                  <div key={log.id} className="p-3 rounded-2xl border border-[#e5e5e7] bg-[#f5f5f7]/60">
+                  <div key={log.id} className="p-3 rounded-xl border border-[#E5E4DE] bg-[#FAF9F5]">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-mono font-bold text-[#1d1d1f] text-[11px]">Subtask {log.subtask_id}</span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                        log.route_matched
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : 'bg-amber-50 text-amber-900 border border-amber-200'
+                      <span className="font-mono-claude font-medium text-[#1F1E1D] text-[11px]">Subtask {log.subtask_id}</span>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                        log.route_matched ? 'bg-[#F2F7F4] text-[#1E6B48]' : 'bg-[#FAF6ED] text-[#8C5D14]'
                       }`}>
-                        {log.route_matched ? '✓ Route Matched' : '⚡ Diverged In Offline'}
+                        {log.route_matched ? '✓ Route Matched' : '⚡ Offline Divergence'}
                       </span>
                     </div>
-                    <div className="text-[#515154] text-[11px] mb-1.5">
+                    <div className="text-[#6B6862] text-[11px] mb-1">
                       Executed offline: <strong>{log.offline_model}</strong> · Online counterfactual: <strong>{log.ideal_online_model}</strong>
                     </div>
-                    <div className="flex items-center gap-3 text-[10px] text-[#86868b] font-mono">
+                    <div className="flex items-center gap-3 text-[10px] text-[#A09D95] font-mono-claude">
                       <span>Offline Carbon: {(log.offline_carbon_kgco2eq * 1000).toFixed(4)}g</span>
                       <span>Reconciled: {(log.reconciled_carbon_kgco2eq * 1000).toFixed(4)}g</span>
-                      <span>Stale Grid: {log.stale_grid_corrected ? 'Corrected' : 'Cached Valid'}</span>
                     </div>
                   </div>
                 ))
               )}
             </div>
 
-            <Button
-              variant="primary"
-              size="md"
-              className="w-full mt-4"
+            <button
               onClick={() => setShowReconciliationModal(false)}
+              className="w-full mt-4 py-2 px-4 rounded-xl bg-[#1F1E1D] text-white text-xs font-medium hover:bg-[#383735] transition-colors cursor-pointer"
             >
               Close
-            </Button>
+            </button>
           </div>
         </div>
       )}
+
     </div>
   );
 }

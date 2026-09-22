@@ -148,3 +148,26 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - Live server responding at `http://localhost:3000`.
 
 **Currently broken / blockers:** None.
+
+## 2026-09-22 | Session 8 — Frontend Diagnosis & Claude-Inspired Restrained Redesign (Complete)
+
+**Done this session:**
+- Diagnosed root causes of frontend update failure:
+  1. Dev server / build collision: `next build` had overwritten `.next` while `next dev` (Turbopack) was running, severing HMR file-watching and stale chunks in browser.
+  2. Silent error suppression: startup `fetch()` calls used `.catch(() => null)` masking API connectivity issues.
+  3. API schema mismatch: `/api/health` returned `online` and `connectivity.online`, while frontend inspected non-existent `network_online`.
+- Fixed all code bugs and fortified network error handling across all frontend endpoints.
+- Re-architected and redesigned the entire frontend from scratch inspired by Claude's chat interface (`claude.ai`):
+  - Palette: Muted warm parchment background (`#FAF9F5`), clean paper surfaces (`#FFFFFF`), delicate hairline warm borders (`#E5E4DE`).
+  - Typography: Literary editorial serif for headings, crisp humanist sans for controls, clean monospace for telemetry.
+  - Centerpiece: Simple rounded input container with unhurried whitespace, quiet preset tabs (`Acme MSA`, `CyberDyne Vendor`, `Custom Agreement`), monospace editor, and discreet toggle pills (`Urgent`, `PII Guard`, `Fault Injection`, `Weights`, `Time-shift`).
+  - Single Accent: Used sparingly with Claude terracotta (`#CC5A36`) for the run action and key focal indicators.
+  - Eliminated admin panel clutter: Replaced heavy metric cards and badge spam with an unhurried conversational timeline, quiet subtask progression, and inline five-factor route inspection drawers.
+  - Preserved all 10 Non-Negotiable Invariants: EcoLogits cloud carbon as-is, CodeCarbon × live grid for local, grey-dashed simulated forecast, scheduler overhead included in all totals, canary PII isolation.
+- Verification:
+  - `orchestrator`: `vitest run` 23/23 tests pass.
+  - `dashboard`: `npx tsc --noEmit` 0 errors; Turbopack compiling live in ~130ms.
+  - Live dev server active on `http://localhost:3000`, orchestrator active on `http://localhost:3001`.
+
+**Currently broken / blockers:** None.
+
