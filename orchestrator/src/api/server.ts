@@ -9,6 +9,10 @@ import { getDb } from '../db/schema.js';
 import { loadConfig } from '../registry/config-loader.js';
 import { runTaskPipeline } from '../pipeline/runner.js';
 import { createElectricityMapsClient } from '../integrations/electricity-maps.js';
+import { rankCandidates } from '../scoring/score.js';
+import { filterForPii } from '../constraints/engine.js';
+import { getConnectivityMonitor } from '../resilience/connectivity.js';
+import { runReconciliationPass } from '../resilience/reconciliation.js';
 
 export function createServer(): express.Express {
   const app = express();
@@ -19,10 +23,13 @@ export function createServer(): express.Express {
   const config = loadConfig();
   const em = createElectricityMapsClient();
 
-  // 1. Health & Status
+  // 1. Health & Status (exposing real-time connectivity monitor state)
   app.get('/api/health', (_req, res) => {
+    const monitor = getConnectivityMonitor();
     res.json({
       status: 'ok',
+      online: monitor.isOnline,
+      connectivity: monitor.getState(),
       service: 'llm_router_orchestrator',
       local_zone: config.localZone,
       timestamp: new Date().toISOString(),
@@ -115,7 +122,7 @@ export function createServer(): express.Express {
   app.get('/api/tasks/latest', (_req, res) => {
     const task = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC LIMIT 1').get() as any;
     if (!task) {
-      return res.json({ task: null, subtasks: [], escalations: [] });
+      return res.json({ task: null, subtasks: [], escalations: [], reconciliations: [] });
     }
     const subtasks = db.prepare('SELECT * FROM subtasks WHERE task_id = ? ORDER BY created_at ASC').all(task.id);
     const escalations = db.prepare(`
@@ -123,7 +130,13 @@ export function createServer(): express.Express {
       JOIN subtasks s ON e.subtask_id = s.id
       WHERE s.task_id = ?
     `).all(task.id);
-    res.json({ task, subtasks, escalations });
+    const reconciliations = db.prepare(`
+      SELECT r.* FROM reconciliation_log r
+      JOIN subtasks s ON r.subtask_id = s.id
+      WHERE s.task_id = ?
+      ORDER BY r.reconciled_at DESC
+    `).all(task.id);
+    res.json({ task, subtasks, escalations, reconciliations });
   });
 
   // 7. Get Task by ID
@@ -137,8 +150,14 @@ export function createServer(): express.Express {
       JOIN subtasks s ON e.subtask_id = s.id
       WHERE s.task_id = ?
     `).all(req.params.id);
+    const reconciliations = db.prepare(`
+      SELECT r.* FROM reconciliation_log r
+      JOIN subtasks s ON r.subtask_id = s.id
+      WHERE s.task_id = ?
+      ORDER BY r.reconciled_at DESC
+    `).all(req.params.id);
 
-    res.json({ task, subtasks, escalations });
+    res.json({ task, subtasks, escalations, reconciliations });
   });
 
   // 8. Live Scoring Endpoint for Route Inspector Sliders
@@ -150,71 +169,58 @@ export function createServer(): express.Express {
         urgency = 'normal',
         data_sensitivity = 'internal',
         weights: clientWeights,
-        complexity_tier = 'medium',
+        // complexity_tier not used by rankCandidates directly — kept for API compat
       } = req.body;
 
       const live = await em.getLatestIntensity(config.localZone);
-      let candidatePool = [...config.models];
 
+      // PII filter: cloud excluded for pii tasks (Invariant 2)
+      let candidatePool = [...config.models];
       if (data_sensitivity === 'pii') {
-        candidatePool = candidatePool.filter(c => c.location === 'local');
+        candidatePool = filterForPii(candidatePool);
       }
 
+      // Active weights: client overrides > urgency > default
       const activeWeights = clientWeights
         ? { ...config.weights, ...clientWeights }
         : (urgency === 'urgent' ? config.urgencyWeights : config.weights);
 
-      const ranked = candidatePool.map(candidate => {
-        const tokens = input_tokens + (config.tokenDefaults[subtask_type] ?? 200);
-        const lat = candidate.predicted_latency_ms;
-        const cost = candidate.predicted_cost_usd_per_1k_tokens * (tokens / 1000);
-        const energy = candidate.predicted_energy_kwh_per_1k_tokens * (tokens / 1000);
-        let carbon = 0;
-        if (candidate.location === 'cloud') {
-          carbon = (candidate.cloud_carbon_kgco2eq_per_1k_tokens ?? 0.0008) * (tokens / 1000);
-        } else {
-          carbon = energy * (live.gco2_per_kwh / 1000);
-        }
-
-        const lat_norm = Math.min(1, lat / config.bounds.latency_ms);
-        const acc_norm = 1 - Math.min(1, candidate.accuracy_tier / 1.0);
-        const cost_norm = Math.min(1, cost / config.bounds.cost_usd);
-        const energy_norm = Math.min(1, energy / config.bounds.energy_kwh);
-        const carbon_norm = Math.min(1, carbon / config.bounds.carbon_kgco2eq);
-
-        const raw_score = (activeWeights.latency * lat_norm)
-          + (activeWeights.accuracy * acc_norm)
-          + (activeWeights.cost * cost_norm)
-          + (activeWeights.energy * energy_norm)
-          + (activeWeights.carbon * carbon_norm);
-
-        // Small jev bonus if cloud or fast
-        const jev_bonus = (candidate.model_id === 'gpt-4o' || candidate.model_id === 'gpt-4o-mini') ? 0.014 : 0.0;
-        const final_score = raw_score - jev_bonus;
-
-        return {
-          model_id: candidate.model_id,
-          location: candidate.location,
-          accuracy_tier: candidate.accuracy_tier,
-          raw_score: parseFloat(raw_score.toFixed(4)),
-          jev_bonus: parseFloat(jev_bonus.toFixed(4)),
-          final_score: parseFloat(final_score.toFixed(4)),
-          lat_norm: parseFloat(lat_norm.toFixed(3)),
-          acc_norm: parseFloat(acc_norm.toFixed(3)),
-          cost_norm: parseFloat(cost_norm.toFixed(3)),
-          energy_norm: parseFloat(energy_norm.toFixed(3)),
-          carbon_norm: parseFloat(carbon_norm.toFixed(3)),
-          is_winner: false,
-        };
+      // Use the canonical scoring formula — same function as the actual router.
+      // This guarantees Route Inspector scores match real routing decisions exactly.
+      const ranked = rankCandidates({
+        candidates: candidatePool,
+        inputTokens: input_tokens,
+        subtaskType: subtask_type,
+        urgency: urgency === 'urgent' ? 'urgent' : 'normal',
+        weights: activeWeights,
+        urgencyWeights: config.urgencyWeights,
+        bounds: config.bounds,
+        liveGridIntensityGco2PerKwh: live.gco2_per_kwh,
+        jevChoiceConfidence: null, // no Jev call in the inspector — scores shown pre-Jev and post-Jev
+        tokenDefaults: config.tokenDefaults,
       });
 
-      ranked.sort((a, b) => a.final_score - b.final_score);
-      if (ranked.length > 0) {
-        ranked[0].is_winner = true;
-      }
+      // Map CandidateScore to the shape the Route Inspector UI expects
+      const candidates = ranked.map((s, idx) => ({
+        model_id: s.model_id,
+        location: s.location,
+        accuracy_tier: candidatePool.find(c => c.model_id === s.model_id)?.accuracy_tier ?? 0,
+        raw_score: parseFloat(s.raw_score.toFixed(4)),
+        jev_bonus: parseFloat(s.components.jev_bonus.toFixed(4)),
+        final_score: parseFloat(s.score_with_jev.toFixed(4)),
+        lat_norm: parseFloat(s.components.latency.toFixed(3)),
+        acc_norm: parseFloat(s.components.accuracy.toFixed(3)),
+        cost_norm: parseFloat(s.components.cost.toFixed(3)),
+        energy_norm: parseFloat(s.components.energy.toFixed(3)),
+        carbon_norm: parseFloat(s.components.carbon.toFixed(3)),
+        predicted_latency_ms: s.predicted_latency_ms,
+        predicted_cost_usd: parseFloat(s.predicted_cost_usd.toFixed(5)),
+        predicted_carbon_kgco2eq: parseFloat(s.predicted_carbon_kgco2eq.toFixed(6)),
+        is_winner: idx === 0,
+      }));
 
       res.json({
-        candidates: ranked,
+        candidates,
         active_weights: activeWeights,
         grid_intensity: live.gco2_per_kwh,
       });
@@ -245,6 +251,38 @@ export function createServer(): express.Express {
       eligible_candidates: "Local candidates only (Invariant 8)",
       clock_mode: "accelerated (1h per second)",
     });
+  });
+
+  // 10. Reconciliation Logs & Trigger (PRD Offline Resilience)
+  app.get('/api/reconciliation', (_req, res) => {
+    try {
+      const logs = db.prepare(`SELECT * FROM reconciliation_log ORDER BY reconciled_at DESC LIMIT 50`).all();
+      const pendingCount = (db.prepare(`SELECT COUNT(*) as count FROM subtasks WHERE needs_reconciliation = 1`).get() as any)?.count ?? 0;
+      const totalOffline = (db.prepare(`SELECT COUNT(*) as count FROM subtasks WHERE degraded_routing = 1`).get() as any)?.count ?? 0;
+      const matchCount = (db.prepare(`SELECT COUNT(*) as count FROM reconciliation_log WHERE match = 1`).get() as any)?.count ?? 0;
+      const mismatchCount = (db.prepare(`SELECT COUNT(*) as count FROM reconciliation_log WHERE match = 0`).get() as any)?.count ?? 0;
+
+      res.json({
+        logs,
+        stats: {
+          pending_reconciliation: pendingCount,
+          total_offline_executed: totalOffline,
+          reconciled_matches: matchCount,
+          reconciled_mismatches: mismatchCount,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/reconcile', async (_req, res) => {
+    try {
+      const result = await runReconciliationPass();
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   return app;

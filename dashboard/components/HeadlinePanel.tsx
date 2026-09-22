@@ -7,6 +7,7 @@ interface HeadlinePanelProps {
   carbonSavedPct: number;
   qualityRetainedPct: number;
   isMeasuredOffline?: boolean;
+  isOnline?: boolean;
 }
 
 export const HeadlinePanel: React.FC<HeadlinePanelProps> = ({
@@ -14,6 +15,7 @@ export const HeadlinePanel: React.FC<HeadlinePanelProps> = ({
   carbonSavedPct,
   qualityRetainedPct,
   isMeasuredOffline = true,
+  isOnline = true,
 }) => {
   return (
     <div className="bg-[#0f172a]/90 border border-slate-800 rounded-xl p-4 shadow-lg backdrop-blur-md">
@@ -25,6 +27,20 @@ export const HeadlinePanel: React.FC<HeadlinePanelProps> = ({
           </h1>
         </div>
         <div className="flex items-center space-x-2">
+          {/* Real Connectivity Indicator (Offline Resilience) */}
+          <span
+            className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border transition-all ${
+              isOnline
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                : 'bg-rose-950 text-rose-300 border-rose-600 animate-pulse shadow-sm shadow-rose-500/30'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}
+            />
+            {isOnline ? 'ONLINE' : 'OFFLINE (Degraded Local)'}
+          </span>
+
           {isMeasuredOffline ? (
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800">
               Measured Offline (N=60)

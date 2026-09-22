@@ -8,6 +8,8 @@ dotenv.config();
 import { getDb, seedModels } from './db/schema.js';
 import { loadConfig } from './registry/config-loader.js';
 import { createServer } from './api/server.js';
+import { getConnectivityMonitor } from './resilience/connectivity.js';
+import { runReconciliationPass } from './resilience/reconciliation.js';
 
 function start() {
   const config = loadConfig();
@@ -16,6 +18,21 @@ function start() {
   // Seed models registry table
   seedModels(db, config.models as any);
 
+  // Start real-time network connectivity monitor (PRD Offline Resilience)
+  const monitor = getConnectivityMonitor();
+  monitor.start(5000);
+  monitor.onStatusChange(async (isOnline, wasOnline) => {
+    if (!wasOnline && isOnline) {
+      console.log('⚡ [Auto-Reconcile] Internet connectivity restored! Running automatic reconciliation pass...');
+      try {
+        const summary = await runReconciliationPass();
+        console.log(`⚡ [Auto-Reconcile] Complete: ${summary.summaryMessage}`);
+      } catch (err: any) {
+        console.error('❌ [Auto-Reconcile] Error in reconciliation pass:', err.message);
+      }
+    }
+  });
+
   const app = createServer();
   const port = process.env['ORCHESTRATOR_PORT'] ? parseInt(process.env['ORCHESTRATOR_PORT'], 10) : 3001;
 
@@ -23,6 +40,7 @@ function start() {
     console.log(`🚀 Orchestrator API running on http://localhost:${port}`);
     console.log(`   Local Grid Zone: ${config.localZone} (${config.mockGridIntensityGco2PerKwh} gCO2/kWh default mock)`);
     console.log(`   Models loaded: ${config.models.map(m => m.model_id).join(', ')}`);
+    console.log(`   Connectivity monitor: probing ${monitor.probeUrl} every 5s`);
   });
 }
 

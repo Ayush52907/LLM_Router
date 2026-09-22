@@ -110,8 +110,26 @@ export interface Subtask {
   verification_probability: number | null;
   escalation_count: number;
   embedding: Buffer | null;
+  degraded_routing?: boolean;
+  degraded_reason?: string | null;
+  estimated_stale_grid?: boolean;
+  needs_reconciliation?: boolean;
+  reconciled_carbon_kgco2eq?: number | null;
   created_at: number;
   completed_at: number | null;
+}
+
+export interface ReconciliationRecord {
+  id: string;
+  subtask_id: string;
+  task_id: string;
+  actual_routed_to: string;
+  would_have_routed_to: string;
+  match: boolean;
+  original_carbon_kgco2eq: number | null;
+  reconciled_carbon_kgco2eq: number | null;
+  notes: string | null;
+  reconciled_at: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -131,3 +131,16 @@ _Last updated: 2026-09-22_
 - [x] Similarity cache: cosine ≥ 0.92 + token count ±20%; re-run constraints on hit
 - [x] PDF→MD tool-offload (markitdown/outline decomposer)
 - [x] **Done:** T6 passes — cache hit rate shows 0% on fresh DB
+
+## Phase 9 — Offline Resilience & Reconnection Reconciliation ✅ (COMPLETE)
+
+- [x] Real-time periodic connectivity monitor (`orchestrator/src/resilience/connectivity.ts`) probing Vercel AI Gateway endpoint
+- [x] Rule-based fallback router (`orchestrator/src/routing/heuristic-router.ts`: `fallbackRouteOffline`) per PRD Locked Decision #1
+- [x] Offline routing policy in `runner.ts` — strictly excludes cloud candidates, sets `degraded_routing = 1`, `needs_reconciliation = 1`
+- [x] Offline grid intensity fallback with 1h historical SQLite cache and conservative default (`estimated_stale_grid = 1`)
+- [x] SQLite schema updates: subtask offline fields + durable `reconciliation_log` table
+- [x] Automatic reconciliation engine (`orchestrator/src/resilience/reconciliation.ts`) triggered on reconnect (re-evaluates routing, logs deltas, backfills stale grid carbon)
+- [x] API endpoints: `/api/health` with online state, `GET /api/reconciliation`, `POST /api/reconcile`
+- [x] UI: Live connectivity indicator in HeadlinePanel, `⚡ offline-routed` badge on DAG nodes, reconciliation banner & audit log modal
+- [x] Test suite: 6 resilience unit tests, 23/23 vitest tests passing
+

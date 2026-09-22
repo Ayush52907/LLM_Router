@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Lock, Cloud, HardDrive, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Lock, Cloud, HardDrive, AlertTriangle, CheckCircle, RefreshCw, Zap } from 'lucide-react';
 
 export interface DagNode {
   id: string;
@@ -14,6 +14,9 @@ export interface DagNode {
   status: 'queued' | 'routing' | 'executing' | 'verifying' | 'done' | 'failed';
   escalated?: boolean;
   originalModel?: string | null;
+  degradedRouting?: boolean;
+  degradedReason?: string | null;
+  needsReconciliation?: boolean;
 }
 
 interface DagCanvasProps {
@@ -109,6 +112,21 @@ export const DagCanvas: React.FC<DagCanvasProps> = ({
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700">
                     <Lock className="w-2.5 h-2.5" />
                     🔒 forced local
+                  </span>
+                )}
+
+                {/* Offline Degraded Routing Badge (PRD Offline Resilience) */}
+                {node.degradedRouting && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/90 text-amber-300 border border-amber-600 animate-pulse">
+                    <Zap className="w-2.5 h-2.5 text-amber-400" />
+                    ⚡ offline-routed
+                  </span>
+                )}
+
+                {/* Pending Reconciliation Tag */}
+                {node.needsReconciliation && (
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-950/80 text-purple-300 border border-purple-800">
+                    pending recon
                   </span>
                 )}
 

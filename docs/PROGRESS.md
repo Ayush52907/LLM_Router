@@ -60,6 +60,7 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 - Electricity Maps free tier zone availability for `IN-KA` (Bengaluru) is unverified. See `OPEN_QUESTIONS.md`.
 - EcoLogits `impacts.gwp.value` may be a `RangeValue` not a scalar. Sidecar must handle both cases. Already noted in CONTEXT.md locked decisions.
 
+<<<<<<< HEAD
 ## 2026-09-22 | Session 4 — Dashboard Apple-Simple Redesign + Real Data Verification
 
 **Done this session:**
@@ -96,4 +97,28 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - 2e: Progressive disclosure "Telemetry details, budgets & policy comparisons" drawer for run budgets, offline policy comparison, and grid forecast.
 - Verification: `npm run build` passed cleanly in 1090ms (0 errors); all 3 daemons (sidecar, orchestrator, dashboard) running live.
 - Pushed commit to `origin/main`.
+
+## 2026-09-22 | Session 6 — Offline Resilience & Reconnection Reconciliation (Complete)
+
+**Done this session:**
+- **Connectivity Monitor** (`orchestrator/src/resilience/connectivity.ts`): Built real-time periodic probing (default every 5s) against the external AI Gateway endpoint with HEAD/GET timeout checks. Exposes `online: boolean` and emits transition events (`offline -> online`) to trigger automatic reconciliation without manual user interaction.
+- **Rule-based Fallback Router** (`orchestrator/src/routing/heuristic-router.ts`: `fallbackRouteOffline`): Implemented PRD Locked Decision #1. When offline, cloud is strictly eliminated. Trivial/low complexity tasks route to smallest local model (`llama3.2:3b`), medium/high/expert to largest available local model (`mistral:7b`).
+- **Offline Routing Policy in Pipeline Runner** (`orchestrator/src/pipeline/runner.ts`): Deliberate policy switch whenever offline. Subtasks are tagged with `degraded_routing = true`, `degraded_reason = 'offline'`, and `needs_reconciliation = true`. Local judge verification is used during outages, and escalation candidates are restricted to local models.
+- **Offline Grid Carbon Fallback** (`orchestrator/src/integrations/electricity-maps.ts`): Network failures gracefully fall back to historical readings in SQLite `grid_intensity_cache`. If older than 1 hour or empty, falls back to conservative default and flags `estimated_stale_grid = true`.
+- **Durable SQLite Persistence** (`orchestrator/src/db/schema.ts`): Added `degraded_routing`, `degraded_reason`, `estimated_stale_grid`, `needs_reconciliation`, `reconciled_carbon_kgco2eq` to `subtasks` with safe dynamic column migrations, and created `reconciliation_log` table with indexes.
+- **Automatic Reconciliation on Reconnect** (`orchestrator/src/resilience/reconciliation.ts`): Queries all subtasks where `needs_reconciliation = 1`, re-runs ideal online routing formula with full candidate pool & Jev, compares choices and logs match/mismatch deltas to `reconciliation_log`, re-fetches live grid to backfill `reconciled_carbon_kgco2eq` without overwriting historical as-measured carbon, and resets `needs_reconciliation = 0`.
+- **API Endpoints** (`orchestrator/src/api/server.ts`): `/api/health` surfaces live connectivity status; added `GET /api/reconciliation` for logs and `POST /api/reconcile` for on-demand trigger.
+- **UI Indicators & Audit Modal** (`dashboard/app/page.tsx`):
+  - Surfaces real-time connectivity status (🟢 `Live API` / 🟡 `OFFLINE (Local)`).
+  - Subtask cards display visual `⚡ Offline-routed` tag and `Needs recon` indicators.
+  - Mission Control surfaces reconciliation audit log modal showing real delta rows from SQLite `reconciliation_log`.
+- **Testing & Build Verification**: Added 6 resilience unit tests in `src/resilience/__tests__/resilience.test.ts`. All 23 vitest tests pass. Full TypeScript compile (`tsc --noEmit`) and Next.js production build (`next build`) pass with 0 errors.
+
+**Verification:**
+- `orchestrator`: `tsc --noEmit` exit 0
+- `orchestrator`: `vitest run` 23/23 tests passing (100% pass)
+- `dashboard`: `npm run build` compiled successfully (exit 0)
+
+**Currently broken / blockers:** None.
+
 

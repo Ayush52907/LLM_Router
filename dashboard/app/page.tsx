@@ -88,6 +88,11 @@ interface Subtask {
   actual_carbon_kgco2eq: number | null;
   verification_pass: number | null;
   escalation_count: number;
+  degraded_routing?: boolean | number;
+  degraded_reason?: string | null;
+  estimated_stale_grid?: boolean | number;
+  needs_reconciliation?: boolean | number;
+  reconciled_carbon_kgco2eq?: number | null;
 }
 
 interface Task {
@@ -120,6 +125,9 @@ interface Weights {
 
 export default function EcoRouterApplePage() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [isNetworkOnline, setIsNetworkOnline] = useState<boolean | null>(null);
+  const [reconciliationLogs, setReconciliationLogs] = useState<any[]>([]);
+  const [showReconciliationModal, setShowReconciliationModal] = useState(false);
   const [grid, setGrid] = useState<GridData | null>(null);
   const [baselines, setBaselines] = useState<BaselineData | null>(null);
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
@@ -159,7 +167,21 @@ export default function EcoRouterApplePage() {
   useEffect(() => {
     async function init() {
       const h = await fetch(`${API_BASE}/api/health`).catch(() => null);
-      setApiOnline(!!h?.ok);
+      if (h?.ok) {
+        setApiOnline(true);
+        const hd = await h.json().catch(() => null);
+        if (hd && typeof hd.network_online === 'boolean') {
+          setIsNetworkOnline(hd.network_online);
+        }
+      } else {
+        setApiOnline(false);
+      }
+
+      const rec = await fetch(`${API_BASE}/api/reconciliation`).catch(() => null);
+      if (rec?.ok) {
+        const rd = await rec.json().catch(() => null);
+        if (rd?.logs) setReconciliationLogs(rd.logs);
+      }
 
       const g = await fetch(`${API_BASE}/api/grid`).catch(() => null);
       if (g?.ok) setGrid(await g.json());
@@ -289,9 +311,22 @@ export default function EcoRouterApplePage() {
               </span>
             )}
             <div className="flex items-center gap-1.5 text-[11px] text-[#86868b]">
-              <span className={`w-1.5 h-1.5 rounded-full ${apiOnline ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-              <span>{apiOnline ? 'Online' : 'Offline'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isNetworkOnline === false ? 'bg-zinc-400' : (apiOnline ? 'bg-emerald-500' : 'bg-amber-400')}`} />
+              <span>{isNetworkOnline === false ? 'Offline Mode' : (apiOnline ? 'Online' : 'Offline')}</span>
             </div>
+            {isNetworkOnline === false && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-800 text-[10px] font-semibold border border-zinc-200">
+                <Zap className="w-2.5 h-2.5 text-zinc-700" /> Degraded Local
+              </span>
+            )}
+            {reconciliationLogs.length > 0 && (
+              <button
+                onClick={() => setShowReconciliationModal(true)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f5f5f7] text-[#1d1d1f] text-[10px] font-medium border border-[#e5e5e7] hover:bg-[#e5e5e7] transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-2.5 h-2.5" /> {reconciliationLogs.length} Reconciled
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -606,6 +641,20 @@ export default function EcoRouterApplePage() {
                           <ArrowRight className="w-3 h-3" />
                           <span>{esc.to_model}</span>
                         </div>
+                      )}
+
+                      {Boolean(st.degraded_routing) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 text-[10px] font-medium border border-dashed border-zinc-400">
+                          <Zap className="w-2.5 h-2.5 text-zinc-600" />
+                          Offline-routed
+                        </span>
+                      )}
+
+                      {Boolean(st.needs_reconciliation) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 text-[10px] font-medium border border-amber-300">
+                          <RefreshCw className="w-2.5 h-2.5" />
+                          Needs recon
+                        </span>
                       )}
 
                       {isPii && (
@@ -995,6 +1044,65 @@ export default function EcoRouterApplePage() {
               size="md"
               className="w-full mt-4"
               onClick={() => setShowTimeShift(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+      {/* ── Modal: Reconciliation Audit Log ─────────────────────────────────── */}
+      {showReconciliationModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-[#e5e5e7] shadow-2xl max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f5f5f7]">
+              <div>
+                <h3 className="text-sm font-semibold text-[#1d1d1f]">Reconciliation Audit Log</h3>
+                <p className="text-[11px] text-[#86868b]">Post-reconnect audit comparing offline routing vs optimal online schedule.</p>
+              </div>
+              <button
+                onClick={() => setShowReconciliationModal(false)}
+                className="text-[#86868b] hover:text-[#1d1d1f] transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs overflow-y-auto flex-1 pr-1">
+              {reconciliationLogs.length === 0 ? (
+                <div className="text-center py-8 text-[#86868b]">
+                  No degraded subtasks recorded. All executions used optimal online routing.
+                </div>
+              ) : (
+                reconciliationLogs.map((log: any) => (
+                  <div key={log.id} className="p-3 rounded-2xl border border-[#e5e5e7] bg-[#f5f5f7]/60">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-mono font-bold text-[#1d1d1f] text-[11px]">Subtask {log.subtask_id}</span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        log.route_matched
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-amber-50 text-amber-900 border border-amber-200'
+                      }`}>
+                        {log.route_matched ? '✓ Route Matched' : '⚡ Diverged In Offline'}
+                      </span>
+                    </div>
+                    <div className="text-[#515154] text-[11px] mb-1.5">
+                      Executed offline: <strong>{log.offline_model}</strong> · Online counterfactual: <strong>{log.ideal_online_model}</strong>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-[#86868b] font-mono">
+                      <span>Offline Carbon: {(log.offline_carbon_kgco2eq * 1000).toFixed(4)}g</span>
+                      <span>Reconciled: {(log.reconciled_carbon_kgco2eq * 1000).toFixed(4)}g</span>
+                      <span>Stale Grid: {log.stale_grid_corrected ? 'Corrected' : 'Cached Valid'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full mt-4"
+              onClick={() => setShowReconciliationModal(false)}
             >
               Close
             </Button>

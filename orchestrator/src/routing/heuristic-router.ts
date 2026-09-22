@@ -109,3 +109,53 @@ export function demoRoute(
   });
   return result.rankedCandidates;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fallbackRouteOffline — PRD Locked Decision #1
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FallbackOfflineInput {
+  subtaskType: SubtaskType;
+  complexityTier: ComplexityTier;
+  dataSensitivity: DataSensitivity;
+  availableCandidates: ModelEntry[];
+}
+
+export interface FallbackOfflineResult {
+  chosenModel: ModelEntry;
+  reason: string;
+}
+
+/**
+ * Offline rule-based fallback router (PRD Locked Decision #1).
+ * Activates whenever connectivity is lost.
+ * Cloud models are strictly eliminated.
+ * Fixed deterministic rules:
+ *   trivial/low complexity  → smallest local model (e.g. llama3.2:3b)
+ *   medium/high/expert      → largest available local model (e.g. mistral:7b)
+ */
+export function fallbackRouteOffline(input: FallbackOfflineInput): FallbackOfflineResult {
+  // Cloud is NEVER a candidate when offline, full stop.
+  const localCandidates = input.availableCandidates.filter((c) => c.location === 'local');
+  if (localCandidates.length === 0) {
+    throw new Error('Fallback offline router: No local models available in registry!');
+  }
+
+  // Sort ascending by accuracy tier so index 0 is smallest, last is largest
+  const sorted = [...localCandidates].sort((a, b) => a.accuracy_tier - b.accuracy_tier);
+  const smallestLocal = sorted[0]!;
+  const largestLocal = sorted[sorted.length - 1]!;
+
+  if (input.complexityTier === 'trivial' || input.complexityTier === 'low') {
+    return {
+      chosenModel: smallestLocal,
+      reason: `offline_rule_tier_${input.complexityTier}_to_smallest_local`,
+    };
+  }
+
+  return {
+    chosenModel: largestLocal,
+    reason: `offline_rule_tier_${input.complexityTier}_to_largest_local`,
+  };
+}
+

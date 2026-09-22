@@ -64,6 +64,11 @@ CREATE TABLE IF NOT EXISTS subtasks (
   verification_probability    REAL,
   escalation_count            INTEGER NOT NULL DEFAULT 0,
   embedding                   BLOB,
+  degraded_routing            INTEGER NOT NULL DEFAULT 0 CHECK(degraded_routing IN (0,1)),
+  degraded_reason             TEXT,
+  estimated_stale_grid        INTEGER NOT NULL DEFAULT 0 CHECK(estimated_stale_grid IN (0,1)),
+  needs_reconciliation        INTEGER NOT NULL DEFAULT 0 CHECK(needs_reconciliation IN (0,1)),
+  reconciled_carbon_kgco2eq   REAL,
   created_at                  INTEGER NOT NULL,
   completed_at                INTEGER
 );
@@ -78,6 +83,22 @@ CREATE TABLE IF NOT EXISTS escalation_events (
   from_model  TEXT NOT NULL,
   to_model    TEXT NOT NULL,
   created_at  INTEGER NOT NULL
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- reconciliation_log (Offline resilience & reconciliation)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS reconciliation_log (
+  id                          TEXT PRIMARY KEY,
+  subtask_id                  TEXT NOT NULL REFERENCES subtasks(id),
+  task_id                     TEXT NOT NULL,
+  actual_routed_to            TEXT NOT NULL,
+  would_have_routed_to        TEXT NOT NULL,
+  match                       INTEGER NOT NULL CHECK(match IN (0,1)),
+  original_carbon_kgco2eq     REAL,
+  reconciled_carbon_kgco2eq   REAL,
+  notes                       TEXT,
+  reconciled_at               INTEGER NOT NULL
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -120,12 +141,15 @@ CREATE TABLE IF NOT EXISTS grid_intensity_cache (
   PRIMARY KEY (zone, fetched_at)
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Indexes
--- ─────────────────────────────────────────────────────────────────────────────
+`;
+
+const INDEX_SQL = `
 CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);
 CREATE INDEX IF NOT EXISTS idx_subtasks_status ON subtasks(status);
+CREATE INDEX IF NOT EXISTS idx_subtasks_needs_reconciliation ON subtasks(needs_reconciliation);
 CREATE INDEX IF NOT EXISTS idx_escalation_subtask ON escalation_events(subtask_id);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_subtask ON reconciliation_log(subtask_id);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_task ON reconciliation_log(task_id);
 CREATE INDEX IF NOT EXISTS idx_baseline_task ON baseline_runs(task_id);
 CREATE INDEX IF NOT EXISTS idx_grid_cache_zone ON grid_intensity_cache(zone, fetched_at DESC);
 `;
@@ -147,7 +171,28 @@ export function getDb(): Database.Database {
 }
 
 function initSchema(db: Database.Database): void {
+  // 1. Create tables
   db.exec(SCHEMA_SQL);
+
+  // 2. Safe migration for existing SQLite databases
+  const columnsToAdd = [
+    { name: 'degraded_routing', def: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'degraded_reason', def: 'TEXT' },
+    { name: 'estimated_stale_grid', def: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'needs_reconciliation', def: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'reconciled_carbon_kgco2eq', def: 'REAL' },
+  ];
+
+  for (const col of columnsToAdd) {
+    try {
+      db.exec(`ALTER TABLE subtasks ADD COLUMN ${col.name} ${col.def}`);
+    } catch {
+      // Column already exists
+    }
+  }
+
+  // 3. Create indexes after tables and columns are guaranteed to exist
+  db.exec(INDEX_SQL);
 }
 
 /** Seed the models table from registry.json. Idempotent — uses INSERT OR REPLACE. */

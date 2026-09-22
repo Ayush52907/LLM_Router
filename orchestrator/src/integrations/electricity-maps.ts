@@ -21,7 +21,8 @@ export interface GridIntensityResult {
   /** Grams of CO₂ equivalent per kWh */
   gco2_per_kwh: number;
   fetched_at: number;
-  source: 'live' | 'mock' | 'cache';
+  source: 'live' | 'mock' | 'cache' | 'stale_cache' | 'stale_fallback';
+  isStale?: boolean;
 }
 
 export interface IElectricityMapsClient {
@@ -35,12 +36,14 @@ export interface IElectricityMapsClient {
 /** Mock intensity per zone (gCO2/kWh). Plausible estimates for demo. */
 const MOCK_INTENSITIES: Record<string, number> = {
   'IN-KA': 650,   // Bengaluru — coal-heavy grid, approximate
+  'IN-SO': 650,   // Southern Region / Bengaluru
   'US-CAL-CISO': 200, // California
   'DE': 350,      // Germany
   'FR': 85,       // France (nuclear-heavy)
 };
 
 const MOCK_FALLBACK_GCO2_PER_KWH = 650;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 export class MockElectricityMapsClient implements IElectricityMapsClient {
   async getLatestIntensity(zone: string): Promise<GridIntensityResult> {
@@ -49,12 +52,13 @@ export class MockElectricityMapsClient implements IElectricityMapsClient {
       gco2_per_kwh: MOCK_INTENSITIES[zone] ?? MOCK_FALLBACK_GCO2_PER_KWH,
       fetched_at: Date.now(),
       source: 'mock',
+      isStale: false,
     };
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Live implementation — calls Electricity Maps v3 API
+// Live implementation — calls Electricity Maps v3 API with offline resiliency
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -70,38 +74,66 @@ export class LiveElectricityMapsClient implements IElectricityMapsClient {
   }
 
   async getLatestIntensity(zone: string): Promise<GridIntensityResult> {
-    // Check DB cache first
+    // 1. Check DB cache first (within 5-min TTL)
     const cached = this.getCached(zone);
-    if (cached) return cached;
+    if (cached) return { ...cached, isStale: false };
 
-    // Call Electricity Maps API
-    const url = `${this.baseUrl}/v3/carbon-intensity/latest?zone=${encodeURIComponent(zone)}`;
-    const response = await fetch(url, {
-      headers: { 'auth-token': this.apiKey },
-    });
+    // 2. Try live Electricity Maps API
+    try {
+      const url = `${this.baseUrl}/v3/carbon-intensity/latest?zone=${encodeURIComponent(zone)}`;
+      const response = await fetch(url, {
+        headers: { 'auth-token': this.apiKey },
+        signal: AbortSignal.timeout(3000),
+      });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(
-        `Electricity Maps API error for zone ${zone}: ${response.status} ${response.statusText} — ${text}`
-      );
+      if (response.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external API response
+        const data = (await response.json()) as any;
+        const gco2PerKwh: number = data.carbonIntensity;
+        if (typeof gco2PerKwh === 'number' && !isNaN(gco2PerKwh)) {
+          const fetchedAt = Date.now();
+          this.saveToCache(zone, fetchedAt, gco2PerKwh);
+          return { zone, gco2_per_kwh: gco2PerKwh, fetched_at: fetchedAt, source: 'live', isStale: false };
+        }
+      } else {
+        console.warn(`[ElectricityMaps] API error for zone ${zone}: ${response.status} ${response.statusText}`);
+      }
+    } catch (err: any) {
+      console.warn(`[ElectricityMaps] Network call failed for zone ${zone} (${err.message}). Using offline cache.`);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external API response
-    const data = (await response.json()) as any;
+    // 3. Fallback during outage: query any historical cached reading in DB
+    const db = getDb();
+    const row = db
+      .prepare(
+        `SELECT zone, fetched_at, current_gco2_per_kwh
+         FROM grid_intensity_cache
+         WHERE zone = ?
+         ORDER BY fetched_at DESC
+         LIMIT 1`
+      )
+      .get(zone) as { zone: string; fetched_at: number; current_gco2_per_kwh: number } | undefined;
 
-    // Response field: carbonIntensity (gCO2eq/kWh)
-    const gco2PerKwh: number = data.carbonIntensity;
-    if (typeof gco2PerKwh !== 'number' || isNaN(gco2PerKwh)) {
-      throw new Error(
-        `Electricity Maps API returned unexpected carbonIntensity value: ${JSON.stringify(data)}`
-      );
+    if (row) {
+      const ageMs = Date.now() - row.fetched_at;
+      const isStale = ageMs > ONE_HOUR_MS;
+      return {
+        zone: row.zone,
+        gco2_per_kwh: row.current_gco2_per_kwh,
+        fetched_at: row.fetched_at,
+        source: isStale ? 'stale_cache' : 'cache',
+        isStale,
+      };
     }
 
-    const fetchedAt = Date.now();
-    this.saveToCache(zone, fetchedAt, gco2PerKwh);
-
-    return { zone, gco2_per_kwh: gco2PerKwh, fetched_at: fetchedAt, source: 'live' };
+    // 4. Fixed conservative default if DB has no historical entries for this zone
+    return {
+      zone,
+      gco2_per_kwh: MOCK_INTENSITIES[zone] ?? MOCK_FALLBACK_GCO2_PER_KWH,
+      fetched_at: Date.now(),
+      source: 'stale_fallback',
+      isStale: true,
+    };
   }
 
   private getCached(zone: string): GridIntensityResult | null {
