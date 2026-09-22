@@ -1,6 +1,9 @@
-/**
- * Orchestrator Entry Point.
- */
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load root .env first, then local .env if present
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+dotenv.config();
 
 import path from 'path';
 import dotenv from 'dotenv';

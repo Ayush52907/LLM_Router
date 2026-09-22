@@ -95,17 +95,34 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
   const gridRes = await em.getLatestIntensity(config.localZone);
   const liveGrid = gridRes.gco2_per_kwh;
 
-  // Insert subtasks into DB
-  const insertSubtaskStmt = db.prepare(`
+  // Pre-insert subtasks so escalation_events foreign keys are satisfied
+  const insertInitialSubtaskStmt = db.prepare(`
     INSERT INTO subtasks (
       id, task_id, description, prompt, output, type, depends_on, input_from,
       urgency, data_sensitivity, pii_class, redacted_prompt, complexity_tier,
-      status, subtask_budget_allowance_usd, routed_model, routed_location,
-      jev_confidence, predicted_latency_ms, predicted_cost_usd, predicted_energy_kwh,
-      predicted_carbon_kgco2eq, predicted_output_tokens, created_at
-    ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-    )
+      status, subtask_budget_allowance_usd, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const st of subtasks) {
+    insertInitialSubtaskStmt.run(
+      st.id, st.task_id, st.description, st.prompt, st.output, st.type,
+      JSON.stringify(st.depends_on), JSON.stringify(st.input_from),
+      st.urgency, st.data_sensitivity, st.pii_class, st.redacted_prompt,
+      st.complexity_tier, st.status, st.subtask_budget_allowance_usd, st.created_at
+    );
+  }
+
+  const updateSubtaskStmt = db.prepare(`
+    UPDATE subtasks SET
+      output = ?, status = ?, routed_model = ?, routed_location = ?,
+      jev_confidence = ?, predicted_latency_ms = ?, predicted_cost_usd = ?,
+      predicted_energy_kwh = ?, predicted_carbon_kgco2eq = ?, predicted_output_tokens = ?,
+      actual_latency_ms = ?, actual_cost_usd = ?, actual_energy_kwh = ?, actual_carbon_kgco2eq = ?,
+      actual_input_tokens = ?, actual_output_tokens = ?,
+      verification_pass = ?, verification_probability = ?, escalation_count = ?,
+      completed_at = ?
+    WHERE id = ?
   `);
 
   for (const st of subtasks) {
@@ -285,15 +302,15 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
     task.running_carbon_kgco2eq += (st.actual_carbon_kgco2eq ?? 0) + jevOverheadCarbon;
     task.running_latency_ms += (st.actual_latency_ms ?? 0) + 25; // 25ms overhead
 
-    // Insert into SQLite
-    insertSubtaskStmt.run(
-      st.id, st.task_id, st.description, st.prompt, st.output, st.type,
-      JSON.stringify(st.depends_on), JSON.stringify(st.input_from),
-      st.urgency, st.data_sensitivity, st.pii_class, st.redacted_prompt,
-      st.complexity_tier, st.status, st.subtask_budget_allowance_usd,
-      st.routed_model, st.routed_location, st.jev_confidence,
-      st.predicted_latency_ms, st.predicted_cost_usd, st.predicted_energy_kwh,
-      st.predicted_carbon_kgco2eq, st.predicted_output_tokens, st.created_at
+    // Update subtask in SQLite
+    updateSubtaskStmt.run(
+      st.output, st.status, st.routed_model, st.routed_location,
+      st.jev_confidence, st.predicted_latency_ms, st.predicted_cost_usd,
+      st.predicted_energy_kwh, st.predicted_carbon_kgco2eq, st.predicted_output_tokens,
+      st.actual_latency_ms, st.actual_cost_usd, st.actual_energy_kwh, st.actual_carbon_kgco2eq,
+      st.actual_input_tokens, st.actual_output_tokens,
+      st.verification_pass ? 1 : 0, st.verification_probability, st.escalation_count,
+      st.completed_at, st.id
     );
   }
 
