@@ -188,6 +188,7 @@ export interface Task {
   running_latency_ms: number;
   created_at: number;
   status: string;
+  output?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

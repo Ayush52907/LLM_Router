@@ -21,24 +21,24 @@
       "cloud_carbon_kgco2eq_per_1k_tokens": null
     },
     {
-      "model_id": "gpt-4o-mini",
+      "model_id": "gemini-3.6-flash",
       "location": "cloud",
-      "accuracy_tier": 0.72,
-      "accuracy_tier_source": "MMLU-based tier estimate (GPT-4o-mini class)",
-      "predicted_latency_ms": 1800,
-      "predicted_cost_usd_per_1k_tokens": 0.00015,
+      "accuracy_tier": 0.82,
+      "accuracy_tier_source": "MMLU-based tier estimate (Gemini 3.6 Flash class)",
+      "predicted_latency_ms": 1100,
+      "predicted_cost_usd_per_1k_tokens": 0.000075,
       "predicted_energy_kwh_per_1k_tokens": 0,
-      "cloud_carbon_kgco2eq_per_1k_tokens": 0.0008
+      "cloud_carbon_kgco2eq_per_1k_tokens": 0.0006
     },
     {
-      "model_id": "gpt-4o",
+      "model_id": "gemini-pro-latest",
       "location": "cloud",
-      "accuracy_tier": 0.95,
-      "accuracy_tier_source": "MMLU-based tier estimate (GPT-4o class)",
-      "predicted_latency_ms": 3500,
-      "predicted_cost_usd_per_1k_tokens": 0.0025,
+      "accuracy_tier": 0.94,
+      "accuracy_tier_source": "MMLU-based tier estimate (Gemini Pro class)",
+      "predicted_latency_ms": 2800,
+      "predicted_cost_usd_per_1k_tokens": 0.00125,
       "predicted_energy_kwh_per_1k_tokens": 0,
-      "cloud_carbon_kgco2eq_per_1k_tokens": 0.0028
+      "cloud_carbon_kgco2eq_per_1k_tokens": 0.0022
     }
   ]
 }

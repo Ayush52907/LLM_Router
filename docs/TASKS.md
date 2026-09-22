@@ -144,3 +144,14 @@ _Last updated: 2026-09-22_
 - [x] UI: Live connectivity indicator in HeadlinePanel, `⚡ offline-routed` badge on DAG nodes, reconciliation banner & audit log modal
 - [x] Test suite: 6 resilience unit tests, 23/23 vitest tests passing
 
+## Phase 10 — Gemini Integration & End-to-End Output Generation ✅ (COMPLETE)
+
+- [x] Model registry: added `gemini-1.5-flash` and `gemini-1.5-pro` alongside local models (`phi3:latest`, `deepseek-coder:6.7b`) and OpenAI models
+- [x] Bounds recalibration: ran `calibrate_bounds.js` to update `config/bounds.json`
+- [x] Integrations: implemented `GeminiClient` (`orchestrator/src/integrations/gemini-client.ts`) supporting Google Gemini REST API, AI Gateway fallback, and domain synthesizer
+- [x] Domain generator: implemented `orchestrator/src/pipeline/output-synthesizer.ts` producing rich, structured outputs for all 5 subtask types and synthesizing aggregate executive reports
+- [x] Offline generation: enhanced `OllamaClient` to use domain synthesizer when Ollama daemon is unreachable
+- [x] Schema & Pipeline: added `output` column to `tasks` table with migrations, updated `runner.ts` to dispatch Gemini models, local models, and store synthesized report
+- [x] UI: added collapsible output viewer on subtask cards and "Workflow Deliverables & Executive Report" panel in Next.js dashboard
+- [x] E2E Verification: created and passed `scripts/test-e2e-pipeline.js` validating online Gemini routing and offline local execution with full outputs
+

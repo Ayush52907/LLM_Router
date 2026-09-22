@@ -11,7 +11,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowUp, Lock, Cloud, HardDrive, AlertCircle,
   ChevronDown, ChevronUp, Sliders, Clock, FastForward,
-  Check, RefreshCw, X, ShieldAlert, Flame, Sparkles, LogOut
+  Check, RefreshCw, X, ShieldAlert, Flame, Sparkles, LogOut,
+  Copy, FileText
 } from 'lucide-react';
 import { authFetch, clearToken, isAuthenticated } from '../lib/auth';
 
@@ -87,6 +88,7 @@ interface Subtask {
   estimated_stale_grid?: boolean | number;
   needs_reconciliation?: boolean | number;
   reconciled_carbon_kgco2eq?: number | null;
+  output?: string | null;
 }
 
 interface Task {
@@ -98,6 +100,7 @@ interface Task {
   max_total_cost_usd: number;
   max_total_carbon_kgco2eq: number;
   max_total_latency_ms: number;
+  output?: string | null;
 }
 
 interface EscalationEvent {
@@ -151,6 +154,15 @@ export default function EcoRouterClaudePage() {
   // Inspector expansion per subtask
   const [expandedSubtaskId, setExpandedSubtaskId] = useState<string | null>(null);
   const [candidatesMap, setCandidatesMap] = useState<Record<string, CandidateScore[]>>({});
+
+  // Output expansion & copy state
+  const [expandedOutputs, setExpandedOutputs] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedReport, setCopiedReport] = useState(false);
+
+  const toggleOutput = (id: string) => {
+    setExpandedOutputs(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Input & Parameter controls
   const [customPrompt, setCustomPrompt] = useState(CONTRACT_ACME);
@@ -847,10 +859,92 @@ export default function EcoRouterClaudePage() {
                         )}
                       </div>
                     )}
+
+                    {/* Collapsible Generated Output */}
+                    {st.output && (
+                      <div className="mt-3 pt-2.5 border-t border-[#F3F3EE] ml-7">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleOutput(st.id);
+                            }}
+                            className="text-xs text-[#7A7870] hover:text-[#1F1E1D] flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <span>{expandedOutputs[st.id] ? 'Hide Output' : 'View Generated Output'}</span>
+                            {expandedOutputs[st.id] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {expandedOutputs[st.id] && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(st.output || '');
+                                setCopiedId(st.id);
+                                setTimeout(() => setCopiedId(null), 2000);
+                              }}
+                              className="text-[11px] text-[#A09D95] hover:text-[#1F1E1D] flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              {copiedId === st.id ? <Check className="w-3 h-3 text-[#1E6B48]" /> : <Copy className="w-3 h-3" />}
+                              <span>{copiedId === st.id ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          )}
+                        </div>
+                        {expandedOutputs[st.id] && (
+                          <div className="p-3 bg-[#FAF9F5] border border-[#E5E4DE] rounded-xl text-xs font-mono-claude text-[#1F1E1D] whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto mt-1">
+                            {st.output}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {/* Final Workflow Deliverable & Report */}
+            {currentTask?.output && (
+              <div className="bg-[#FFFFFF] border border-[#E5E4DE] rounded-3xl p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+                <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#F3F3EE]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-[#1F1E1D] text-white flex items-center justify-center">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-serif-claude text-base font-normal text-[#1F1E1D]">
+                        Workflow Deliverable & Executive Report
+                      </h3>
+                      <p className="text-[11px] text-[#7A7870]">
+                        Complete synthesized output across all executed subtasks
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium bg-[#F3F3EE] text-[#1F1E1D] border border-[#E5E4DE]">
+                      {subtasks.some(s => Boolean(s.degraded_routing)) ? '⚡ Offline Executed' : '🟢 Online Verified'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(currentTask.output || '');
+                        setCopiedReport(true);
+                        setTimeout(() => setCopiedReport(false), 2000);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs text-[#1F1E1D] bg-[#FAF9F5] border border-[#E5E4DE] hover:bg-[#F3F3EE] transition-colors cursor-pointer"
+                    >
+                      {copiedReport ? <Check className="w-3 h-3 text-[#1E6B48]" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedReport ? 'Report Copied' : 'Copy Full Report'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-5 bg-[#FAF9F5] border border-[#E5E4DE] rounded-2xl text-xs font-mono-claude text-[#1F1E1D] whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
+                  {currentTask.output}
+                </div>
+              </div>
+            )}
 
             {/* Grid Intensity Simulated Forecast (Quiet Hairline Accordion) */}
             {grid && (

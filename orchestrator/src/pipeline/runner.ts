@@ -21,7 +21,7 @@ import type {
 import { loadConfig } from '../registry/config-loader.js';
 import { getDb } from '../db/schema.js';
 import { redactText, rehydrateText } from '../privacy/redaction.js';
-import { extractDocumentOutline, decomposeContractTask } from '../privacy/decomposer.js';
+import { extractDocumentOutline, decomposeTask } from '../privacy/decomposer.js';
 import { rankCandidates, predictCarbonKgco2, predictedTokens } from '../scoring/score.js';
 import { filterWithRelaxation, filterForPii, canEscalate } from '../constraints/engine.js';
 import { SimilarityCache } from '../cache/similarity-cache.js';
@@ -32,6 +32,8 @@ import { createElectricityMapsClient } from '../integrations/electricity-maps.js
 import { defaultSidecarClient } from '../integrations/sidecar-client.js';
 import { defaultOllamaClient } from '../integrations/ollama-client.js';
 import { defaultCloudGatewayClient } from '../integrations/gateway-client.js';
+import { defaultGeminiClient } from '../integrations/gemini-client.js';
+import { synthesizeTaskDeliverable } from './output-synthesizer.js';
 import { verifyRawPiiOutput } from '../privacy/local-verifier.js';
 
 export interface RunPipelineOptions {
@@ -88,7 +90,7 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
   // Stage 1: Redaction & Outline Decomposition
   const redaction = redactText(options.rawInput);
   const outline = extractDocumentOutline(options.rawInput);
-  const subtasks = decomposeContractTask(taskId, "Process vendor contract", outline);
+  const subtasks = decomposeTask(taskId, options.rawInput, outline, options.dataSensitivity ?? 'pii');
 
   // Active scoring weights (sliders or urgency)
   const activeWeights: ScoringWeights = {
@@ -291,8 +293,11 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
     let latencyMs = chosen.predicted_latency_ms;
 
     if (chosen.location === 'local') {
-      // Call Ollama for local model inference
-      const ollamaRes = await defaultOllamaClient.generate(chosen.model_id, st.prompt);
+      // Call Ollama for local model inference (with domain fallback)
+      const ollamaRes = await defaultOllamaClient.generate(chosen.model_id, st.prompt, {
+        subtaskType: st.type,
+        description: st.description,
+      });
       subtaskOutput = ollamaRes.response;
       inputTokens = ollamaRes.inputTokens;
       outputTokens = ollamaRes.outputTokens;
@@ -300,11 +305,22 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
     } else {
       // Cloud model execution prompt (redacted prompt if pii: Invariant 2)
       const promptToUse = (st.data_sensitivity === 'pii' && st.redacted_prompt) ? st.redacted_prompt : st.prompt;
-      const cloudRes = await defaultCloudGatewayClient.generate(chosen.model_id, promptToUse);
-      subtaskOutput = cloudRes.response;
-      inputTokens = cloudRes.inputTokens;
-      outputTokens = cloudRes.outputTokens;
-      latencyMs = cloudRes.totalDurationMs;
+      if (chosen.model_id.startsWith('gemini')) {
+        const geminiRes = await defaultGeminiClient.generate(chosen.model_id, promptToUse, {
+          subtaskType: st.type,
+          description: st.description,
+        });
+        subtaskOutput = geminiRes.response;
+        inputTokens = geminiRes.inputTokens;
+        outputTokens = geminiRes.outputTokens;
+        latencyMs = geminiRes.totalDurationMs;
+      } else {
+        const cloudRes = await defaultCloudGatewayClient.generate(chosen.model_id, promptToUse);
+        subtaskOutput = cloudRes.response;
+        inputTokens = cloudRes.inputTokens;
+        outputTokens = cloudRes.outputTokens;
+        latencyMs = cloudRes.totalDurationMs;
+      }
     }
 
     st.output = subtaskOutput;
@@ -359,8 +375,8 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
     if (!verified) {
       // When offline, cloud models cannot be reached — escalate to largest local model
       const strongModel = isOnline
-        ? (config.models.find(m => m.model_id === 'gpt-4o') || config.models[0]!)
-        : (config.models.find(m => m.model_id === 'mistral:7b') || config.models.find(m => m.location === 'local')!);
+        ? (config.models.find(m => m.model_id === 'gemini-3.6-flash') || config.models[0]!)
+        : (config.models.find(m => m.model_id === 'deepseek-coder:6.7b') || config.models.find(m => m.location === 'local')!);
       const reasonCode = isFaultInjected
         ? 'fault_injection_verification_failed'
         : (!isOnline ? 'offline_verification_failed' : 'cascade_verification_failed');
@@ -444,14 +460,16 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
     );
   }
 
+  const finalDeliverable = synthesizeTaskDeliverable(task, subtasks);
+  task.output = finalDeliverable;
   task.status = 'done';
 
   // Update task in DB
   db.prepare(`
     UPDATE tasks
-    SET status = ?, running_cost_usd = ?, running_carbon_kgco2eq = ?, running_latency_ms = ?
+    SET status = ?, running_cost_usd = ?, running_carbon_kgco2eq = ?, running_latency_ms = ?, output = ?
     WHERE id = ?
-  `).run(task.status, task.running_cost_usd, task.running_carbon_kgco2eq, task.running_latency_ms, task.id);
+  `).run(task.status, task.running_cost_usd, task.running_carbon_kgco2eq, task.running_latency_ms, task.output, task.id);
 
   return { task, subtasks };
 }

@@ -10,6 +10,12 @@ import { loadConfig } from './registry/config-loader.js';
 import { createServer } from './api/server.js';
 import { getConnectivityMonitor } from './resilience/connectivity.js';
 import { runReconciliationPass } from './resilience/reconciliation.js';
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
 
 function start() {
   const config = loadConfig();

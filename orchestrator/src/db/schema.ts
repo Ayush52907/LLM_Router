@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   running_carbon_kgco2eq      REAL NOT NULL DEFAULT 0,
   running_latency_ms          REAL NOT NULL DEFAULT 0,
   created_at                  INTEGER NOT NULL,
-  status                      TEXT NOT NULL DEFAULT 'queued'
+  status                      TEXT NOT NULL DEFAULT 'queued',
+  output                      TEXT
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -176,11 +177,35 @@ function initSchema(db: Database.Database): void {
 
   // 2. Safe migration for existing SQLite databases
   const columnsToAdd = [
+    { name: 'depends_on', def: `TEXT NOT NULL DEFAULT '[]'` },
+    { name: 'input_from', def: `TEXT NOT NULL DEFAULT '[]'` },
+    { name: 'pii_class', def: 'TEXT' },
+    { name: 'redacted_prompt', def: 'TEXT' },
+    { name: 'subtask_budget_allowance_usd', def: 'REAL' },
+    { name: 'routed_model', def: 'TEXT' },
+    { name: 'routed_location', def: 'TEXT' },
+    { name: 'jev_confidence', def: 'REAL' },
+    { name: 'predicted_latency_ms', def: 'REAL' },
+    { name: 'predicted_cost_usd', def: 'REAL' },
+    { name: 'predicted_energy_kwh', def: 'REAL' },
+    { name: 'predicted_carbon_kgco2eq', def: 'REAL' },
+    { name: 'predicted_output_tokens', def: 'INTEGER' },
+    { name: 'actual_latency_ms', def: 'REAL' },
+    { name: 'actual_cost_usd', def: 'REAL' },
+    { name: 'actual_energy_kwh', def: 'REAL' },
+    { name: 'actual_carbon_kgco2eq', def: 'REAL' },
+    { name: 'actual_input_tokens', def: 'INTEGER' },
+    { name: 'actual_output_tokens', def: 'INTEGER' },
+    { name: 'verification_pass', def: 'INTEGER' },
+    { name: 'verification_probability', def: 'REAL' },
+    { name: 'escalation_count', def: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'embedding', def: 'BLOB' },
     { name: 'degraded_routing', def: 'INTEGER NOT NULL DEFAULT 0' },
     { name: 'degraded_reason', def: 'TEXT' },
     { name: 'estimated_stale_grid', def: 'INTEGER NOT NULL DEFAULT 0' },
     { name: 'needs_reconciliation', def: 'INTEGER NOT NULL DEFAULT 0' },
     { name: 'reconciled_carbon_kgco2eq', def: 'REAL' },
+    { name: 'completed_at', def: 'INTEGER' },
   ];
 
   for (const col of columnsToAdd) {
@@ -189,6 +214,12 @@ function initSchema(db: Database.Database): void {
     } catch {
       // Column already exists
     }
+  }
+
+  try {
+    db.exec(`ALTER TABLE tasks ADD COLUMN output TEXT`);
+  } catch {
+    // Column already exists
   }
 
   // 3. Create indexes after tables and columns are guaranteed to exist
