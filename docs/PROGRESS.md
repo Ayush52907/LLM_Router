@@ -121,4 +121,30 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 
 **Currently broken / blockers:** None.
 
+## 2026-09-22 | Session 7 — Frontend Rendering & Apple UI Polish Fix (Complete)
 
+**Done this session:**
+- Analyzed `docs/Screenshot 2026-09-22 114038.jpg` and `docs/Screenshot 2026-09-22 114103.jpg`.
+- Identified core visual defects:
+  1. Width constraint mismatch: `max-w-5xl` (1024px) created an unnatural narrow column leaving >40% blank space on modern desktop monitors.
+  2. Viewport height clipping: Hero `min-h-[calc(100vh-56px)]` forced results off-screen, creating an awkward cut-off banner at the bottom of viewport.
+  3. Smashed preset controls: Inactive preset buttons had no gap, no borders, and no contrast, rendering as a run-on word `Acme CloudCyberDyneCustom`.
+  4. Unstyled monospace contract textarea with ugly browser scrollbars and clipped canary tokens.
+  5. Bare, low-contrast toggle pills (`Urgent`, `Fault Arming`, `Weights`) with clipped text and abrupt styling.
+  6. Subtask cards with cramped telemetry (`Tier: high 6.5s $0.00000 0.5200g CO₂`) and blurry dashed borders.
+  7. Route inspector mathematical glitch displaying `0.320= 0.320` when Jev bonus was zero, with solid black score bars bleeding under badges.
+  8. Footer methodology text overlapping with developer overlay badge.
+- Comprehensive UI overhaul implemented:
+  - Scaled layout shell to `max-w-7xl` with responsive padding and centering across Header, Results, and Details.
+  - Replaced smashed buttons with Apple-grade segmented control (`p-1 bg-[#f5f5f7] border border-[#e5e5e7] rounded-xl shadow-inner`) with active pill elevation.
+  - Wrapped textarea in a code editor container with custom smooth scrollbars and monospace typography.
+  - Added semantic variants (`success`, `warning`, `info`, `local`, `cloud`) to [`dashboard/components/ui/Badge.tsx`](file:///E:/LLM_Router/dashboard/components/ui/Badge.tsx).
+  - Redesigned Subtask cards with circular step badges, model pills, distinct solid offline-fallback badges, and structured micro-chips for latency, cost, carbon, and verification.
+  - Fixed Route Inspector math format and styled the 5-factor stacked score bar with matching legend colors.
+  - Upgraded disclosure drawer and methodology footer with proper bottom padding (`pb-12`).
+- Verification:
+  - `dashboard`: `npm run build` compiled successfully in 953ms (0 errors).
+  - `orchestrator`: `vitest run` 23/23 tests pass.
+  - Live server responding at `http://localhost:3000`.
+
+**Currently broken / blockers:** None.

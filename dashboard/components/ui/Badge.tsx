@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-export type BadgeVariant = 'neutral' | 'dark' | 'outline' | 'subtle';
+export type BadgeVariant = 'neutral' | 'dark' | 'outline' | 'subtle' | 'success' | 'warning' | 'info' | 'local' | 'cloud';
 export type BadgeSize = 'sm' | 'md';
 
 interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -32,6 +32,31 @@ const variantStyles: Record<BadgeVariant, { bg: string; text: string; border: st
     bg: '#f5f5f7',
     text: '#6e6e73',
     border: 'transparent',
+  },
+  success: {
+    bg: '#f0fdf4',
+    text: '#166534',
+    border: '#bbf7d0',
+  },
+  warning: {
+    bg: '#fffbeb',
+    text: '#92400e',
+    border: '#fde68a',
+  },
+  info: {
+    bg: '#eff6ff',
+    text: '#1e40af',
+    border: '#bfdbfe',
+  },
+  local: {
+    bg: '#f0fdf4',
+    text: '#15803d',
+    border: '#86efac',
+  },
+  cloud: {
+    bg: '#f0f9ff',
+    text: '#0369a1',
+    border: '#bae6fd',
   },
 };
 
