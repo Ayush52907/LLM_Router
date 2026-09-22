@@ -78,3 +78,22 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 - `/api/baselines` → cost −71.3%, carbon −59%, quality 100% ✅
 - `POST /api/tasks` → 5 subtasks, 4 escalation events, real Jev confidence 0.18–0.87 ✅
 - Dashboard at `http://localhost:3000` ✅ · Commit `f5726b1` pushed ✅
+
+## 2026-09-22 | Session 5 — Full Production Flow Restructure & Component System
+
+**Done this session:**
+- Full frontend flow restructure: Production-ready flow (modeled after Claude.ai / ChatGPT), not an engineering debug dashboard.
+- Section 1 (First Viewport): Calm hero landing with `CenterFlow` radial flowing animation centered behind a prominent chat-style input box (`rounded-2xl`, soft elevation shadow, comfortable textarea, preset selector, attached bottom parameter toolbar with understated pill toggles).
+- Integrated `CenterFlow` radial flowing animation component (`dashboard/components/ui/CenterFlow.tsx`) and configured `components.json` with React Bits Pro registry configuration.
+- Unified component library created and reused across the entire app:
+  - `Badge.tsx`: Consistent 6px border-radius, defined semantic variants (`neutral`, `success`, `warning`, `info`, `local`, `cloud`, `outline`).
+  - `Button.tsx`: Consistent 10px border-radius, defined variants (`primary`, `secondary`, `outline`, `ghost`), loading states.
+  - `Card.tsx`: Consistent 14px border-radius, `#eaeaea` border, soft elevation shadow.
+- Section 2 (Results): Revealed cleanly below input with strict visual hierarchy:
+  - 2a: Headline metrics band with large bold numerals (`+71.3%` cost, `+59.0%` carbon, `100.0%` quality) and secondary caption text.
+  - 2b: Redesigned Subtask Pipeline: Clean vertical list/timeline with primary description, secondary routed model with location icon, distinct escalation arrow visual (`from → to`), and tertiary monospace telemetry.
+  - 2c & 2d: Route Inspector: Dominant winner row, comparison candidates, 5-factor horizontal stacked scoring bar.
+  - 2e: Progressive disclosure "Telemetry details, budgets & policy comparisons" drawer for run budgets, offline policy comparison, and grid forecast.
+- Verification: `npm run build` passed cleanly in 1090ms (0 errors); all 3 daemons (sidecar, orchestrator, dashboard) running live.
+- Pushed commit to `origin/main`.
+

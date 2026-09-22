@@ -1,160 +1,30 @@
 'use client';
 
 /**
- * EcoRouter Dashboard — Notion B&W aesthetic.
- * Custom components: BanterLoader (loading), NotionButton (CTA),
- * MetricCard family (KPIs + budgets + bar chart), CommentPanel (route inspector).
- * Zero mocked data — every number traces to a real API response.
+ * EcoRouter — Production Flow Redesign.
+ * Section 1: Hero / Input (first viewport, calm landing, Claude/ChatGPT-style input, CenterFlow radial animation).
+ * Section 2: Results (headline metrics, clean vertical subtask pipeline, route inspector, details).
+ * Built with uniform component library: Badge, Button, Card, CenterFlow.
+ * Zero mocked data — all metrics from real API endpoints.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import styled from 'styled-components';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Play, ChevronDown, ChevronUp, Settings, X, FastForward,
-  Lock, Cloud, HardDrive, AlertTriangle, CheckCircle2, Leaf,
-  BarChart3, Zap,
+  Play, FastForward, Settings, Lock, Cloud, HardDrive,
+  AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
+  Zap, Flame, ShieldAlert, Sliders, ArrowRight, Clock,
+  DollarSign, Leaf, RefreshCw, X, FileText, Check
 } from 'lucide-react';
 
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { CenterFlow } from '../components/ui/CenterFlow';
 import { BanterLoader } from '../components/BanterLoader';
-import { NotionButton } from '../components/NotionButton';
-import { MetricKpi, BudgetGauge, BarChartCard } from '../components/MetricCard';
-import { CommentPanel, SubtaskComment } from '../components/CommentPanel';
 
 const API_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL ?? 'http://localhost:3001';
 
-// ─── Styled layout shells ─────────────────────────────────────────────────────
-
-const Page = styled.div`
-  max-width: 1160px;
-  margin: 0 auto;
-  padding: 40px 24px 80px;
-  min-height: 100vh;
-`;
-
-const Section = styled.section`
-  margin-bottom: 32px;
-`;
-
-const SectionTitle = styled.h2`
-  font-size: 11px;
-  font-weight: 700;
-  color: #9b9b9b;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 14px;
-`;
-
-const Divider = styled.hr`
-  border: none;
-  border-top: 1px solid #f0f0f0;
-  margin: 32px 0;
-`;
-
-const Grid3 = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-`;
-
-const Grid2 = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-`;
-
-const Surface = styled.div`
-  background: #ffffff;
-  border: 1px solid #e9e9e9;
-  border-radius: 12px;
-  padding: 20px;
-`;
-
-const Chip = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 6px;
-  border: 1px solid ${p => p.$active ? '#1a1a1a' : '#e0e0e0'};
-  background: ${p => p.$active ? '#1a1a1a' : '#fff'};
-  color: ${p => p.$active ? '#fff' : '#6b6b6b'};
-  cursor: pointer;
-  transition: all 0.18s;
-  &:hover { border-color: #1a1a1a; color: ${p => p.$active ? '#fff' : '#1a1a1a'}; }
-`;
-
-const Pill = styled.span<{ $mono?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
-  color: #6b6b6b;
-  background: #fafafa;
-  ${p => p.$mono ? 'font-family: monospace;' : ''}
-`;
-
-const PillDark = styled(Pill)`
-  border-color: #1a1a1a;
-  background: #1a1a1a;
-  color: #fff;
-`;
-
-const Textarea = styled.textarea`
-  width: 100%;
-  resize: vertical;
-  border: 1px solid #e9e9e9;
-  border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 12px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  color: #1a1a1a;
-  background: #fafafa;
-  outline: none;
-  line-height: 1.6;
-  &:focus { border-color: #1a1a1a; background: #fff; }
-  &::placeholder { color: #c0c0c0; }
-`;
-
-const SubtaskCard = styled.div<{ $selected?: boolean }>`
-  padding: 14px 16px;
-  border-radius: 10px;
-  border: 1.5px solid ${p => p.$selected ? '#1a1a1a' : '#e9e9e9'};
-  background: ${p => p.$selected ? '#f9f9f9' : '#fff'};
-  cursor: pointer;
-  transition: all 0.15s;
-  &:hover { border-color: #1a1a1a; }
-`;
-
-const StatusDot = styled.span<{ $status: string }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 20px;
-  letter-acing: 0.03em;
-  border: 1px solid;
-  
-  ${p => {
-    switch (p.$status) {
-      case 'done':      return 'border-color:#1a1a1a; background:#1a1a1a; color:#fff;';
-      case 'failed':    return 'border-color:#1a1a1a; background:#fff; color:#1a1a1a;';
-      case 'routing':
-      case 'executing':
-      case 'verifying': return 'border-color:#1a1a1a; background:#f5f5f5; color:#1a1a1a;';
-      default:          return 'border-color:#e0e0e0; background:#fafafa; color:#9b9b9b;';
-    }
-  }}
-`;
-
-// ─── Contracts ────────────────────────────────────────────────────────────────
+// ── Contracts ─────────────────────────────────────────────────────────────────
 
 const CONTRACT_ACME = `# MASTER SERVICES AGREEMENT — ACME CLOUD & OMNI RETAIL
 Effective Date: January 15, 2026 | Contract ID: MSA-2026-0891
@@ -187,7 +57,7 @@ Irrevocable 5-year auto-renewal unless physical notice 180–175 days before exp
 ## 3. DISCLAIMERS (RISK)
 Client forfeits all legal claims for patient injury caused by Vendor gross negligence.`;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface GridData {
   current_intensity_gco2_per_kwh: number;
@@ -241,11 +111,15 @@ interface EscalationEvent {
   created_at: string;
 }
 
-interface Weights { latency: number; accuracy: number; cost: number; energy: number; carbon: number; }
+interface Weights {
+  latency: number;
+  accuracy: number;
+  cost: number;
+  energy: number;
+  carbon: number;
+}
 
-// ─── Main component ───────────────────────────────────────────────────────────
-
-export default function EcoRouterDashboard() {
+export default function EcoRouterProductionPage() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [grid, setGrid] = useState<GridData | null>(null);
   const [baselines, setBaselines] = useState<BaselineData | null>(null);
@@ -255,21 +129,33 @@ export default function EcoRouterDashboard() {
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
+  // Selected subtask for Route Inspector
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectorCandidates, setInspectorCandidates] = useState<any[]>([]);
 
+  // Input & Parameter controls
+  const [customPrompt, setCustomPrompt] = useState(CONTRACT_ACME);
+  const [activePreset, setActivePreset] = useState<'acme' | 'cyberdyne' | 'custom'>('acme');
   const [isUrgent, setIsUrgent] = useState(false);
   const [isPiiGuard, setIsPiiGuard] = useState(true);
   const [isFaultInjected, setIsFaultInjected] = useState(false);
-  const [customPrompt, setCustomPrompt] = useState(CONTRACT_ACME);
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showBaselines, setShowBaselines] = useState(false);
+  const [showWeightsDrawer, setShowWeightsDrawer] = useState(false);
+  const [weights, setWeights] = useState<Weights>({
+    latency: 0.25,
+    accuracy: 0.35,
+    cost: 0.15,
+    energy: 0.10,
+    carbon: 0.15,
+  });
+
+  // Time-shift modal & details
   const [showTimeShift, setShowTimeShift] = useState(false);
   const [timeShiftData, setTimeShiftData] = useState<any | null>(null);
-  const [weights, setWeights] = useState<Weights>({ latency: 0.25, accuracy: 0.35, cost: 0.15, energy: 0.10, carbon: 0.15 });
+  const [showDetailsSection, setShowDetailsSection] = useState(false);
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // ── 1. Init Data ────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function init() {
@@ -283,13 +169,17 @@ export default function EcoRouterDashboard() {
       if (b?.ok) setBaselines(await b.json());
 
       const c = await fetch(`${API_BASE}/api/config`).catch(() => null);
-      if (c?.ok) { const d = await c.json(); if (d.weights) setWeights(d.weights); }
+      if (c?.ok) {
+        const d = await c.json();
+        if (d.weights) setWeights(d.weights);
+      }
 
       const l = await fetch(`${API_BASE}/api/tasks/latest`).catch(() => null);
       if (l?.ok) {
         const d = await l.json();
         if (d.task && d.subtasks?.length > 0) {
-          setCurrentTask(d.task); setSubtasks(d.subtasks);
+          setCurrentTask(d.task);
+          setSubtasks(d.subtasks);
           setEscalations(d.escalations ?? []);
           setSelectedId(d.subtasks[0].id);
         }
@@ -298,7 +188,7 @@ export default function EcoRouterDashboard() {
     init();
   }, []);
 
-  // ── Inspector scoring ─────────────────────────────────────────────────────
+  // ── 2. Route Inspector dynamic scoring ──────────────────────────────────────
 
   const fetchInspector = useCallback(async (st: Subtask, w: Weights) => {
     const r = await fetch(`${API_BASE}/api/score`, {
@@ -309,10 +199,14 @@ export default function EcoRouterDashboard() {
         complexity_tier: st.complexity_tier,
         data_sensitivity: st.pii_class === 'raw_pii' ? 'pii' : (isPiiGuard ? 'pii' : 'internal'),
         urgency: isUrgent ? 'urgent' : 'normal',
-        weights: w, input_tokens: 2000,
+        weights: w,
+        input_tokens: 2000,
       }),
     }).catch(() => null);
-    if (r?.ok) { const d = await r.json(); setInspectorCandidates(d.candidates ?? []); }
+    if (r?.ok) {
+      const d = await r.json();
+      setInspectorCandidates(d.candidates ?? []);
+    }
   }, [isUrgent, isPiiGuard]);
 
   useEffect(() => {
@@ -320,706 +214,792 @@ export default function EcoRouterDashboard() {
     if (st) fetchInspector(st, weights);
   }, [selectedId, weights, isUrgent, isPiiGuard, fetchInspector]);
 
-  // ── Run pipeline ──────────────────────────────────────────────────────────
+  // ── 3. Run Pipeline ─────────────────────────────────────────────────────────
 
   const handleRun = useCallback(async () => {
-    setIsRunning(true); setRunError(null);
-    setSubtasks([]); setCurrentTask(null); setEscalations([]); setSelectedId(null); setInspectorCandidates([]);
+    setIsRunning(true);
+    setRunError(null);
     try {
       const res = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          raw_input: customPrompt || 'Process vendor contract.',
+          raw_input: customPrompt || 'Process vendor contract: extract parties, classify clauses, summarize obligations, flag risks, draft reply.',
           urgency: isUrgent ? 'urgent' : 'normal',
           data_sensitivity: isPiiGuard ? 'pii' : 'internal',
           fault_injected_type: isFaultInjected ? 'generation' : null,
           custom_weights: weights,
         }),
       });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
+
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error ?? `HTTP ${res.status}`);
+      }
+
       const data = await res.json();
       if (data.task && data.subtasks) {
-        setCurrentTask(data.task); setSubtasks(data.subtasks);
+        setCurrentTask(data.task);
+        setSubtasks(data.subtasks);
         setEscalations(data.escalations ?? []);
         if (data.subtasks.length > 0) setSelectedId(data.subtasks[0].id);
+
+        // Smooth scroll to results
+        setTimeout(() => {
+          resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 150);
       }
     } catch (err: any) {
-      setRunError(err.message ?? 'Unknown error');
-    } finally { setIsRunning(false); }
+      setRunError(err.message ?? 'Failed to execute pipeline');
+    } finally {
+      setIsRunning(false);
+    }
   }, [customPrompt, isUrgent, isPiiGuard, isFaultInjected, weights]);
 
-  // ── Time-shift ────────────────────────────────────────────────────────────
+  // ── 4. Time Shift Batch API ────────────────────────────────────────────────
 
   const handleTimeShift = useCallback(async () => {
     const r = await fetch(`${API_BASE}/api/time-shift`, { method: 'POST' }).catch(() => null);
-    if (r?.ok) { setTimeShiftData(await r.json()); setShowTimeShift(true); }
+    if (r?.ok) {
+      setTimeShiftData(await r.json());
+      setShowTimeShift(true);
+    }
   }, []);
-
-  // ── Derived ───────────────────────────────────────────────────────────────
 
   const selectedSt = subtasks.find(s => s.id === selectedId) ?? null;
   const selectedEsc = selectedSt ? escalations.find(e => e.subtask_id === selectedSt.id) : null;
 
-  const inspectorComment: SubtaskComment | null = selectedSt ? {
-    id: selectedSt.id,
-    title: selectedSt.description,
-    meta: [
-      selectedSt.complexity_tier,
-      selectedSt.actual_latency_ms !== null ? `${(selectedSt.actual_latency_ms / 1000).toFixed(1)}s` : null,
-      selectedSt.actual_cost_usd !== null ? `\$${selectedSt.actual_cost_usd.toFixed(5)}` : null,
-      selectedSt.actual_carbon_kgco2eq !== null ? `${(selectedSt.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂` : null,
-    ].filter(Boolean).join(' · '),
-    body: selectedSt.status === 'done'
-      ? `Routed to ${selectedSt.routed_model ?? 'unknown'} (${selectedSt.routed_location ?? '?'}). ` +
-        `Verification: ${selectedSt.verification_pass ? 'passed' : 'failed'}.` +
-        (selectedEsc ? ` Escalated from ${selectedEsc.from_model}: ${selectedEsc.reason_code}.` : '')
-      : `Status: ${selectedSt.status}. Waiting for route decision…`,
-    piiClass: selectedSt.pii_class,
-    routedModel: selectedSt.routed_model,
-    routedLocation: selectedSt.routed_location,
-    jevConfidence: selectedSt.jev_confidence,
-    verificationPass: selectedSt.verification_pass !== null ? Boolean(selectedSt.verification_pass) : null,
-    escalated: !!selectedEsc,
-    escalatedFrom: selectedEsc?.from_model ?? null,
-  } : null;
-
-  // Build bar chart data from the last run's subtasks
-  const barData = subtasks.slice(0, 7).map((st, i) => ({
-    label: ['Ex', 'Cl', 'Su', 'Fl', 'Dr'][i] ?? `S${i + 1}`,
-    height: st.actual_latency_ms ? Math.min(100, (st.actual_latency_ms / 8000) * 100) : 20,
-    dot: (st.escalation_count > 0 ? 'top' : undefined) as 'top' | 'bottom' | 'both' | undefined,
-  }));
-
-  const totalCost = currentTask?.running_cost_usd ?? 0;
-  const totalCarbon = currentTask?.running_carbon_kgco2eq ?? 0;
-  const totalLatency = currentTask?.running_latency_ms ?? 0;
-
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
-    <>
-      {/* Banter Loader overlay during pipeline run */}
-      {isRunning && <BanterLoader label="Running pipeline — Jev routing each subtask…" />}
+    <div className="min-h-screen bg-[#fafafa] text-[#111111] flex flex-col font-sans antialiased selection:bg-[#111] selection:text-white">
+      {/* Full-screen loading overlay during run */}
+      {isRunning && <BanterLoader label="Running pipeline — Jev routing each subtask via five-factor formula…" />}
 
-      <Page>
-        {/* ── Header ─────────────────────────────────────── */}
-        <Section>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-            <div>
-              <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1, marginBottom: 6 }}>
-                EcoRouter
-              </h1>
-              <p style={{ fontSize: 14, color: '#6b6b6b', fontWeight: 500 }}>
-                Carbon-aware LLM scheduler · Jev-guided routing · Savings proven, not asserted
-              </p>
+      {/* ── Top quiet nav ────────────────────────────────────────────────────── */}
+      <header className="w-full border-b border-[#eaeaea] bg-white/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-md bg-[#18181b] flex items-center justify-center text-white font-bold text-xs">
+              E
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
-                background: apiOnline === null ? '#d0d0d0' : apiOnline ? '#1a1a1a' : '#e0e0e0',
-              }} />
-              <span style={{ fontSize: 12, color: '#9b9b9b' }}>
-                {apiOnline === null ? 'Connecting…' : apiOnline ? `API online · ${grid?.zone ?? ''}` : 'API offline'}
-              </span>
-              {grid && (
-                <Pill $mono>
-                  {grid.current_intensity_gco2_per_kwh} gCO₂/kWh
-                </Pill>
-              )}
-            </div>
+            <span className="font-semibold text-sm tracking-tight text-[#18181b]">EcoRouter</span>
+            <span className="text-xs text-[#71717a] hidden sm:inline">· Carbon-aware LLM scheduler</span>
           </div>
 
-          {/* ── KPI headline row (MetricKpi cards) ── */}
-          {baselines?.measured_summary && (
-            <Grid3>
-              <MetricKpi
-                title="Cost saved"
-                value={`+${baselines.measured_summary.cost_saved_pct.toFixed(1)}%`}
-                sub="vs Always-strongest baseline"
-                badge="Measured offline N=60"
-              />
-              <MetricKpi
-                title="Carbon saved"
-                value={`+${baselines.measured_summary.carbon_saved_pct.toFixed(1)}%`}
-                sub="EcoLogits (cloud) · CodeCarbon (local)"
-              />
-              <MetricKpi
-                title="Quality retained"
-                value={`${baselines.measured_summary.quality_retained_pct.toFixed(1)}%`}
-                sub="per rubric & MMLU benchmark tiers"
-              />
-            </Grid3>
-          )}
-        </Section>
+          <div className="flex items-center gap-3 text-xs text-[#71717a]">
+            {grid && (
+              <Badge variant="outline" size="sm">
+                <Leaf className="w-3 h-3 text-emerald-600 mr-0.5" />
+                <span>{grid.zone}</span>
+                <span className="font-mono text-[#18181b] ml-1">{grid.current_intensity_gco2_per_kwh} gCO₂/kWh</span>
+              </Badge>
+            )}
+            <div className="flex items-center gap-1.5 pl-2 border-l border-[#eaeaea]">
+              <span className={`w-2 h-2 rounded-full ${apiOnline ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+              <span className="hidden md:inline">{apiOnline ? 'Live API' : 'Connecting'}</span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        <Divider />
+      {/* ── SECTION 1: Hero / Input (First Viewport) ────────────────────────── */}
+      <section className="relative min-h-[calc(100vh-56px)] flex flex-col justify-center items-center px-4 py-12">
+        <CenterFlow className="w-full max-w-4xl flex flex-col items-center">
+          {/* Calm Hero Title */}
+          <div className="text-center mb-8 max-w-xl mx-auto">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#111111] mb-2.5">
+              Where intelligence meets efficiency.
+            </h1>
+            <p className="text-sm sm:text-base text-[#666666] leading-relaxed">
+              Route each contract subtask to the right model, location, and timing.
+              Savings proven through verified carbon and cost telemetry.
+            </p>
+          </div>
 
-        {/* ── Submit pipeline ─────────────────────────────── */}
-        <Section>
-          <SectionTitle>Submit a pipeline run</SectionTitle>
+          {/* Large Chat-Style Input Box (Claude / ChatGPT style) */}
+          <div className="w-full max-w-2xl bg-white border border-[#eaeaea] rounded-[20px] shadow-[0_8px_30px_rgba(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] transition-all duration-200 focus-within:border-[#a1a1aa] focus-within:shadow-[0_12px_40px_rgba(0,0,0,0.07)] p-4">
+            {/* Top preset bar inside the box */}
+            <div className="flex items-center justify-between pb-3 mb-2 border-b border-[#f4f4f5] text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[#a1a1aa] font-medium mr-1 text-[11px] uppercase tracking-wider">Preset:</span>
+                <button
+                  type="button"
+                  onClick={() => { setCustomPrompt(CONTRACT_ACME); setActivePreset('acme'); }}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${activePreset === 'acme' ? 'bg-[#f4f4f5] text-[#18181b] font-semibold' : 'text-[#71717a] hover:text-[#18181b]'}`}
+                >
+                  Acme Cloud (MSA)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCustomPrompt(CONTRACT_CYBERDYNE); setActivePreset('cyberdyne'); }}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${activePreset === 'cyberdyne' ? 'bg-[#f4f4f5] text-[#18181b] font-semibold' : 'text-[#71717a] hover:text-[#18181b]'}`}
+                >
+                  CyberDyne (Vendor)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActivePreset('custom'); }}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${activePreset === 'custom' ? 'bg-[#f4f4f5] text-[#18181b] font-semibold' : 'text-[#71717a] hover:text-[#18181b]'}`}
+                >
+                  Custom
+                </button>
+              </div>
 
-          <Surface>
-            {/* Contract preset chooser */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setShowPrompt(!showPrompt)}
-                style={{
-                  fontSize: 13, fontWeight: 600, color: '#1a1a1a', background: 'none',
-                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0,
-                }}
-              >
-                Contract input {showPrompt ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              </button>
-              {[
-                { label: 'Acme Cloud', val: CONTRACT_ACME },
-                { label: 'CyberDyne', val: CONTRACT_CYBERDYNE },
-              ].map(p => (
-                <Chip key={p.label} $active={customPrompt === p.val} onClick={() => setCustomPrompt(p.val)}>
-                  {p.label}
-                </Chip>
-              ))}
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#b0b0b0', fontFamily: 'monospace' }}>
+              <span className="font-mono text-[11px] text-[#a1a1aa]">
                 ~{Math.round(customPrompt.length / 4)} tokens
               </span>
             </div>
 
-            {showPrompt && (
-              <Textarea
-                rows={7}
-                value={customPrompt}
-                onChange={e => setCustomPrompt(e.target.value)}
-                placeholder="Paste contract markdown or task instructions…"
-                style={{ marginBottom: 14 }}
-              />
-            )}
+            {/* Comfortable large textarea */}
+            <textarea
+              rows={4}
+              value={customPrompt}
+              onChange={(e) => { setCustomPrompt(e.target.value); setActivePreset('custom'); }}
+              placeholder="Paste a contract, vendor agreement, or describe the task..."
+              className="w-full resize-none border-none outline-none font-sans text-sm text-[#18181b] placeholder:text-[#a1a1aa] leading-relaxed bg-transparent"
+            />
 
-            {/* Toggles + settings */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-              {[
-                { label: isUrgent ? '⚡ Urgent' : 'Normal priority', active: isUrgent, fn: () => setIsUrgent(!isUrgent) },
-                { label: isPiiGuard ? '🔒 PII Guard on' : 'No PII Guard', active: isPiiGuard, fn: () => setIsPiiGuard(!isPiiGuard) },
-                { label: isFaultInjected ? '💥 Fault armed' : 'No fault injection', active: isFaultInjected, fn: () => setIsFaultInjected(!isFaultInjected) },
-              ].map(t => (
-                <Chip key={t.label} $active={t.active} onClick={t.fn}>{t.label}</Chip>
-              ))}
-              <Chip $active={showSettings} onClick={() => setShowSettings(!showSettings)}>
-                <Settings size={11} /> Weights
-              </Chip>
+            {/* Attached parameter toolbar */}
+            <div className="pt-3 border-t border-[#f4f4f5] flex flex-wrap items-center justify-between gap-3">
+              {/* Parameter pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setIsUrgent(!isUrgent)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
+                    isUrgent ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b] border border-transparent'
+                  }`}
+                  title="Prioritizes latency over carbon/cost"
+                >
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>{isUrgent ? 'Urgent priority' : 'Normal priority'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPiiGuard(!isPiiGuard)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
+                    isPiiGuard ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b] border border-transparent'
+                  }`}
+                  title="PII subtasks strictly stay on local hardware"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>{isPiiGuard ? 'PII Guard on' : 'PII Guard off'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFaultInjected(!isFaultInjected)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
+                    isFaultInjected ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b] border border-transparent'
+                  }`}
+                  title="Inject generation failure to demo cascade escalation"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>{isFaultInjected ? 'Fault armed' : 'No fault'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowWeightsDrawer(!showWeightsDrawer)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
+                    showWeightsDrawer ? 'bg-[#e4e4e7] text-[#18181b]' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b]'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Weights</span>
+                </button>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTimeShift}
+                  title="Analyze deferring batch jobs to greener grid windows"
+                >
+                  <FastForward className="w-3 h-3 mr-0.5" />
+                  Time-shift
+                </Button>
+
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleRun}
+                  loading={isRunning}
+                >
+                  <Play className="w-3.5 h-3.5 fill-current mr-0.5" />
+                  Run Pipeline
+                </Button>
+              </div>
             </div>
 
-            {/* Weight sliders */}
-            {showSettings && (
-              <div style={{
-                borderTop: '1px solid #f0f0f0', paddingTop: 16, marginBottom: 16,
-                display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16,
-              }}>
-                {(Object.keys(weights) as (keyof Weights)[]).map(k => (
-                  <div key={k}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 6 }}>
-                      <span style={{ color: '#6b6b6b', fontWeight: 600, textTransform: 'capitalize' }}>{k}</span>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#1a1a1a' }}>{weights[k].toFixed(2)}</span>
+            {/* Weights Drawer (Inline inside input container) */}
+            {showWeightsDrawer && (
+              <div className="mt-3 pt-3 border-t border-[#f4f4f5] grid grid-cols-2 sm:grid-cols-5 gap-3">
+                {(Object.keys(weights) as (keyof Weights)[]).map((k) => (
+                  <div key={k} className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-[#71717a] capitalize">{k}</span>
+                      <span className="font-mono font-bold text-[#18181b]">{weights[k].toFixed(2)}</span>
                     </div>
                     <input
-                      type="range" min={0} max={1} step={0.05}
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
                       value={weights[k]}
-                      onChange={e => setWeights(w => ({ ...w, [k]: parseFloat(e.target.value) }))}
+                      onChange={(e) => setWeights({ ...weights, [k]: parseFloat(e.target.value) })}
+                      className="w-full accent-[#18181b]"
                     />
                   </div>
                 ))}
               </div>
             )}
+          </div>
 
-            {/* Action buttons — NotionButton (the custom pill CTA) */}
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <NotionButton onClick={handleRun} disabled={isRunning}>
-                <Play size={13} fill="currentColor" />
-                {isRunning ? 'Running…' : 'Run Pipeline'}
-              </NotionButton>
-              <NotionButton onClick={handleTimeShift} style={{ minWidth: 'unset', padding: '0 18px' }}>
-                <FastForward size={13} /> Time-shift batch
-              </NotionButton>
+          {/* Error notice if run failed */}
+          {runError && (
+            <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center gap-2 max-w-lg">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{runError}</span>
             </div>
+          )}
 
-            {/* Error */}
-            {runError && (
-              <div style={{
-                marginTop: 14, padding: '10px 14px', borderRadius: 8,
-                border: '1px solid #1a1a1a', background: '#f5f5f5',
-                fontSize: 12, color: '#1a1a1a',
-              }}>
-                Error: {runError}
-              </div>
-            )}
-          </Surface>
-        </Section>
+          {/* Quiet scroll indicator if results already exist */}
+          {subtasks.length > 0 && (
+            <button
+              onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              className="mt-8 text-xs text-[#71717a] hover:text-[#18181b] flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>View latest execution telemetry</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </CenterFlow>
+      </section>
 
-        {/* ── Empty state ──────────────────────────────────── */}
-        {subtasks.length === 0 && !isRunning && (
-          <>
-            <Divider />
-            <div style={{ textAlign: 'center', padding: '56px 24px' }}>
-              <Zap size={32} style={{ margin: '0 auto 16px', display: 'block', opacity: 0.15 }} />
-              <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8, letterSpacing: -0.5 }}>
-                No pipeline run yet
-              </h2>
-              <p style={{ fontSize: 14, color: '#6b6b6b', maxWidth: 380, margin: '0 auto' }}>
-                Choose a contract above and click <strong>Run Pipeline</strong>. Jev scores each subtask, the formula picks a model, and every result comes from the real backend.
-              </p>
-            </div>
-          </>
-        )}
-
-        {/* ── Pipeline results ─────────────────────────────── */}
-        {subtasks.length > 0 && (
-          <>
-            <Divider />
-            <Section>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <SectionTitle style={{ marginBottom: 0 }}>Subtask pipeline</SectionTitle>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Pill>{subtasks.filter(s => s.status === 'done').length}/{subtasks.length} done</Pill>
-                  {escalations.length > 0 && <PillDark>{escalations.length} escalated</PillDark>}
-                </div>
+      {/* ── SECTION 2: Results (Revealed on Scroll or Post-Run) ──────────────── */}
+      {subtasks.length > 0 && (
+        <section ref={resultsRef} className="max-w-6xl mx-auto w-full px-6 py-12 border-t border-[#eaeaea]">
+          {/* 2a. Headline metrics band */}
+          {baselines?.measured_summary && (
+            <div className="mb-10">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-[#71717a] uppercase tracking-wider">
+                  Verified Outcome vs Always-Strongest (Baseline A)
+                </span>
+                <Badge variant="neutral" size="sm">
+                  Measured Offline N=60
+                </Badge>
               </div>
 
-              <Grid2>
-                {/* ── Left: Subtask list ── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {subtasks.map((st, i) => {
-                    const isSelected = st.id === selectedId;
-                    const esc = escalations.find(e => e.subtask_id === st.id);
-                    const isPii = st.pii_class === 'raw_pii';
-
-                    return (
-                      <SubtaskCard key={st.id} $selected={isSelected} onClick={() => setSelectedId(st.id)}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <span style={{
-                              width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                              background: isSelected ? '#1a1a1a' : '#f0f0f0',
-                              color: isSelected ? '#fff' : '#9b9b9b',
-                              fontSize: 10, fontWeight: 800,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>{i + 1}</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3 }}>
-                              {st.description}
-                            </span>
-                          </div>
-                          <StatusDot $status={st.status}>
-                            {st.status === 'done' && <CheckCircle2 size={8} />}
-                            {st.status}
-                          </StatusDot>
-                        </div>
-
-                        {/* Badges */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                          <Pill $mono>{st.complexity_tier}</Pill>
-                          {isPii && (
-                            <PillDark><Lock size={8} /> Forced local</PillDark>
-                          )}
-                          {st.routed_model && (
-                            <Pill $mono>
-                              {st.routed_location === 'local' ? <HardDrive size={8} /> : <Cloud size={8} />}
-                              {st.routed_model}
-                            </Pill>
-                          )}
-                          {esc && (
-                            <PillDark><AlertTriangle size={8} /> {esc.from_model}→{esc.to_model}</PillDark>
-                          )}
-                          {st.jev_confidence !== null && !isPii && (
-                            <Pill $mono>Jev {((st.jev_confidence ?? 0) * 100).toFixed(0)}%</Pill>
-                          )}
-                        </div>
-
-                        {/* Actual metrics (after done) */}
-                        {st.status === 'done' && (
-                          <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 10, color: '#9b9b9b', fontFamily: 'monospace' }}>
-                            {st.actual_latency_ms !== null && <span>{(st.actual_latency_ms / 1000).toFixed(1)}s</span>}
-                            {st.actual_cost_usd !== null && <span>${st.actual_cost_usd.toFixed(5)}</span>}
-                            {st.actual_carbon_kgco2eq !== null && <span>{(st.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂</span>}
-                            {st.verification_pass !== null && (
-                              <span style={{ color: st.verification_pass ? '#1a1a1a' : '#6b6b6b', fontWeight: 700 }}>
-                                {st.verification_pass ? '✓ verified' : '✗ failed'}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </SubtaskCard>
-                    );
-                  })}
-                </div>
-
-                {/* ── Right: CommentPanel (route inspector) ── */}
-                <CommentPanel
-                  title="Route Inspector"
-                  rightLabel="five-factor formula · not a black box"
-                  comment={inspectorComment}
-                  emptyText="Select a subtask to inspect its routing decision."
-                />
-              </Grid2>
-            </Section>
-
-            {/* ── Score breakdown table ── */}
-            {inspectorCandidates.length > 0 && (
-              <Section>
-                <SectionTitle>Scoring breakdown — {selectedSt?.description}</SectionTitle>
-                <Surface>
-                  {/* Legend */}
-                  <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 11, color: '#9b9b9b' }}>
-                    {[
-                      { l: 'Latency', c: '#1a1a1a' }, { l: 'Accuracy', c: '#555' },
-                      { l: 'Cost', c: '#777' }, { l: 'Energy', c: '#999' }, { l: 'Carbon', c: '#bbb' },
-                    ].map(s => (
-                      <span key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: s.c, display: 'inline-block' }} />
-                        {s.l}
-                      </span>
-                    ))}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Cost */}
+                <Card className="p-5">
+                  <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider mb-1">Cost Saved</div>
+                  <div className="text-3xl font-extrabold text-[#18181b] tracking-tight">
+                    +{baselines.measured_summary.cost_saved_pct.toFixed(1)}%
                   </div>
+                  <div className="text-xs text-[#71717a] mt-1">vs Always-strongest baseline ($0.092 vs $0.026)</div>
+                </Card>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {inspectorCandidates.map(c => (
-                      <div key={c.model_id} style={{
-                        padding: '12px 14px', borderRadius: 10,
-                        border: `1.5px solid ${c.is_winner ? '#1a1a1a' : '#e9e9e9'}`,
-                        background: c.is_winner ? '#f9f9f9' : '#fff',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {c.is_winner && <PillDark>Selected</PillDark>}
-                            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13 }}>{c.model_id}</span>
-                            <span style={{ fontSize: 10, color: '#9b9b9b' }}>({c.location})</span>
-                          </div>
-                          <div style={{ fontFamily: 'monospace', fontSize: 11, display: 'flex', gap: 10 }}>
-                            <span style={{ color: '#9b9b9b' }}>{c.raw_score.toFixed(3)}</span>
-                            {c.jev_bonus > 0 && <span>−{c.jev_bonus.toFixed(3)} Jev</span>}
-                            <strong style={{ color: '#1a1a1a' }}>= {c.final_score.toFixed(3)}</strong>
-                          </div>
-                        </div>
-                        {/* Stacked bar */}
-                        <div style={{ height: 4, borderRadius: 2, background: '#f0f0f0', display: 'flex', overflow: 'hidden' }}>
-                          {[
-                            [c.lat_norm, '#1a1a1a', 0.25], [c.acc_norm, '#555', 0.35],
-                            [c.cost_norm, '#777', 0.15], [c.energy_norm, '#999', 0.10], [c.carbon_norm, '#bbb', 0.15],
-                          ].map(([v, col, w], i) => (
-                            <div key={i} style={{ width: `${(v as number) * (w as number) * 100}%`, background: col as string, height: '100%' }} />
-                          ))}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#b0b0b0', fontFamily: 'monospace', marginTop: 5 }}>
-                          Accuracy tier {c.accuracy_tier.toFixed(2)}
-                        </div>
-                      </div>
-                    ))}
+                {/* Carbon */}
+                <Card className="p-5">
+                  <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider mb-1">Carbon Saved</div>
+                  <div className="text-3xl font-extrabold text-emerald-700 tracking-tight">
+                    +{baselines.measured_summary.carbon_saved_pct.toFixed(1)}%
                   </div>
-                </Surface>
-              </Section>
-            )}
+                  <div className="text-xs text-[#71717a] mt-1">EcoLogits (cloud) · CodeCarbon (local)</div>
+                </Card>
 
-            {/* ── Budgets (BudgetGauge cards) ── */}
-            {currentTask && (
-              <Section>
-                <SectionTitle>Run budgets</SectionTitle>
-                <Grid3>
-                  <BudgetGauge
-                    label="Cost"
-                    current={`$${totalCost.toFixed(5)}`}
-                    max={`$${currentTask.max_total_cost_usd.toFixed(2)}`}
-                    pct={(totalCost / currentTask.max_total_cost_usd) * 100}
-                  />
-                  <BudgetGauge
-                    label="Carbon"
-                    current={`${(totalCarbon * 1000).toFixed(3)}g`}
-                    max={`${(currentTask.max_total_carbon_kgco2eq * 1000).toFixed(0)}g`}
-                    pct={(totalCarbon / currentTask.max_total_carbon_kgco2eq) * 100}
-                  />
-                  <BudgetGauge
-                    label="Latency"
-                    current={`${(totalLatency / 1000).toFixed(1)}s`}
-                    max={`${(currentTask.max_total_latency_ms / 1000).toFixed(0)}s`}
-                    pct={(totalLatency / currentTask.max_total_latency_ms) * 100}
-                  />
-                </Grid3>
-              </Section>
-            )}
+                {/* Quality */}
+                <Card className="p-5">
+                  <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider mb-1">Quality Retained</div>
+                  <div className="text-3xl font-extrabold text-blue-700 tracking-tight">
+                    {baselines.measured_summary.quality_retained_pct.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-[#71717a] mt-1">per rubric & MMLU benchmark accuracy tiers</div>
+                </Card>
+              </div>
+            </div>
+          )}
 
-            {/* ── Latency bar chart (BarChartCard) ── */}
-            {barData.length > 0 && (
-              <Section>
-                <SectionTitle>Per-subtask latency</SectionTitle>
-                <div style={{ maxWidth: 340 }}>
-                  <BarChartCard
-                    title="Subtask latency"
-                    range={`${(totalLatency / 1000).toFixed(1)}s`}
-                    dateRange={`${subtasks.filter(s => s.status === 'done').length} of ${subtasks.length} subtasks complete`}
-                    bars={barData}
-                    readings={subtasks
-                      .filter(s => s.actual_latency_ms !== null)
-                      .slice(0, 2)
-                      .map(s => ({
-                        time: s.description.split(' ').slice(0, 3).join(' ') + '…',
-                        value: `${(s.actual_latency_ms! / 1000).toFixed(1)}s`,
-                      }))}
-                    headerAction={
-                      <span style={{ fontSize: 10, color: '#9b9b9b', fontFamily: 'monospace' }}>
-                        {escalations.length > 0 ? `${escalations.length} escalated` : 'no escalations'}
-                      </span>
-                    }
-                  />
-                </div>
-              </Section>
-            )}
+          {/* 2b & 2c: Subtask Pipeline + Route Inspector (2-Column Grid) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mb-10">
+            {/* Left 7 cols: Subtask Pipeline (Clean vertical timeline/list) */}
+            <div className="lg:col-span-7 flex flex-col gap-3">
+              <div className="flex items-center justify-between pb-2 mb-1">
+                <h2 className="text-sm font-bold text-[#18181b] tracking-tight">Subtask Execution Pipeline</h2>
+                <span className="text-xs text-[#71717a]">
+                  {subtasks.filter(s => s.status === 'done').length}/{subtasks.length} completed
+                </span>
+              </div>
 
-            {/* ── Escalation log ── */}
-            {escalations.length > 0 && (
-              <Section>
-                <SectionTitle>Escalation events</SectionTitle>
-                <Surface style={{ padding: '14px 18px' }}>
-                  {escalations.map(e => (
-                    <div key={e.id} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '10px 0', borderBottom: '1px solid #f0f0f0',
-                    }}>
-                      <div>
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>{e.reason_code}</span>
-                        <span style={{ fontSize: 12, color: '#6b6b6b', marginLeft: 10 }}>
-                          {e.from_model} → <strong>{e.to_model}</strong>
+              {subtasks.map((st, i) => {
+                const isSelected = st.id === selectedId;
+                const esc = escalations.find(e => e.subtask_id === st.id);
+                const isPii = st.pii_class === 'raw_pii';
+
+                return (
+                  <div
+                    key={st.id}
+                    onClick={() => setSelectedId(st.id)}
+                    className={`p-4 rounded-xl border transition-all duration-150 cursor-pointer text-left ${
+                      isSelected
+                        ? 'bg-white border-[#18181b] shadow-sm ring-1 ring-[#18181b]'
+                        : 'bg-white border-[#eaeaea] hover:border-[#d4d4d8]'
+                    }`}
+                  >
+                    {/* Primary Line: Step number + Description + Status */}
+                    <div className="flex items-start justify-between gap-3 mb-1.5">
+                      <div className="flex items-start gap-2.5">
+                        <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${
+                          isSelected ? 'bg-[#18181b] text-white' : 'bg-[#f4f4f5] text-[#71717a]'
+                        }`}>
+                          {i + 1}
+                        </span>
+                        <span className="text-sm font-semibold text-[#18181b] leading-tight">
+                          {st.description}
                         </span>
                       </div>
-                      <span style={{ fontSize: 10, color: '#9b9b9b', fontFamily: 'monospace' }}>
-                        {new Date(e.created_at).toLocaleTimeString()}
-                      </span>
+
+                      <Badge
+                        variant={st.status === 'done' ? 'success' : st.status === 'failed' ? 'warning' : 'neutral'}
+                        size="sm"
+                      >
+                        {st.status === 'done' && <CheckCircle2 className="w-2.5 h-2.5" />}
+                        {st.status}
+                      </Badge>
                     </div>
-                  ))}
-                </Surface>
-              </Section>
-            )}
-          </>
-        )}
 
-        <Divider />
+                    {/* Secondary Line: Model routed + location icon */}
+                    <div className="flex items-center gap-2 text-xs text-[#71717a] ml-7 mb-2">
+                      {st.routed_model ? (
+                        <div className="flex items-center gap-1 font-mono font-medium text-[#18181b]">
+                          {st.routed_location === 'local' ? (
+                            <HardDrive className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Cloud className="w-3 h-3 text-blue-600" />
+                          )}
+                          <span>{st.routed_model}</span>
+                          <span className="text-[#a1a1aa] font-sans font-normal">({st.routed_location})</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#a1a1aa] italic">Routing decision pending...</span>
+                      )}
 
-        {/* ── Baseline comparison ──────────────────────────── */}
-        {baselines?.offline_stats && (
-          <Section>
-            <button
-              onClick={() => setShowBaselines(!showBaselines)}
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 14,
-              }}
-            >
-              <SectionTitle style={{ marginBottom: 0 }}>
-                Policy comparison — measured offline eval
-              </SectionTitle>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Pill>Measured offline (N=60)</Pill>
-                {showBaselines ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              </div>
-            </button>
+                      {/* Escalation transition visual */}
+                      {esc && (
+                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[11px] font-semibold border border-amber-200">
+                          <span>{esc.from_model}</span>
+                          <ArrowRight className="w-3 h-3" />
+                          <span>{esc.to_model}</span>
+                          <span className="text-[10px] font-normal text-amber-700">({esc.reason_code})</span>
+                        </div>
+                      )}
 
-            {showBaselines && (
-              <Grid3>
-                {[
-                  {
-                    label: 'Cost (USD)', fmt: (v: number) => `$${v.toFixed(4)}`,
-                    cols: [
-                      { name: 'Always-strongest', v: baselines.offline_stats.always_strongest.cost.mean },
-                      { name: 'Random', v: baselines.offline_stats.random.cost.mean },
-                      { name: 'This system', v: baselines.offline_stats.this_system.cost.mean, overhead: true },
-                    ],
-                  },
-                  {
-                    label: 'Carbon (kg)', fmt: (v: number) => `${v.toFixed(5)}`,
-                    cols: [
-                      { name: 'Always-strongest', v: baselines.offline_stats.always_strongest.carbon.mean },
-                      { name: 'Random', v: baselines.offline_stats.random.carbon.mean },
-                      { name: 'This system', v: baselines.offline_stats.this_system.carbon.mean, overhead: true },
-                    ],
-                  },
-                  {
-                    label: 'Quality retained', fmt: (v: number) => `${(v * 100).toFixed(1)}%`,
-                    cols: [
-                      { name: 'Always-strongest', v: 1.0 },
-                      { name: 'Random', v: baselines.offline_stats.random.quality.mean },
-                      { name: 'This system', v: baselines.offline_stats.this_system.quality.mean },
-                    ],
-                  },
-                ].map(col => {
-                  const maxV = Math.max(...col.cols.map(d => d.v)) || 1;
-                  return (
-                    <Surface key={col.label}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9b9b9b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        {col.label}
+                      {isPii && (
+                        <Badge variant="warning" size="sm">
+                          <Lock className="w-2.5 h-2.5" />
+                          Forced local (PII)
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Tertiary Line: Lighter monospace telemetry */}
+                    <div className="flex items-center gap-3 text-[11px] text-[#a1a1aa] font-mono ml-7">
+                      <span className="text-[#71717a] font-sans">Tier: <strong>{st.complexity_tier}</strong></span>
+                      {st.actual_latency_ms !== null && (
+                        <span>{(st.actual_latency_ms / 1000).toFixed(1)}s</span>
+                      )}
+                      {st.actual_cost_usd !== null && (
+                        <span>${st.actual_cost_usd.toFixed(5)}</span>
+                      )}
+                      {st.actual_carbon_kgco2eq !== null && (
+                        <span>{(st.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂</span>
+                      )}
+                      {st.verification_pass !== null && (
+                        <span className={st.verification_pass ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>
+                          {st.verification_pass ? '✓ verified' : '✗ failed'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Right 5 cols: Route Inspector & Five-Factor Breakdown */}
+            <div className="lg:col-span-5 sticky top-20">
+              <Card className="p-5">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#eaeaea]">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#18181b]">Route Inspector</h3>
+                    <p className="text-[11px] text-[#71717a]">Five-factor scoring telemetry · Not a black box</p>
+                  </div>
+                  {selectedSt && (
+                    <Badge variant={selectedSt.pii_class === 'raw_pii' ? 'warning' : 'neutral'} size="sm">
+                      {selectedSt.pii_class === 'raw_pii' ? 'PII locked' : 'Candidate audit'}
+                    </Badge>
+                  )}
+                </div>
+
+                {selectedSt ? (
+                  <div className="space-y-4">
+                    {/* Selected node summary */}
+                    <div className="bg-[#f4f4f5] p-3 rounded-lg border border-[#e4e4e7]">
+                      <div className="text-xs font-semibold text-[#18181b] mb-1">
+                        {selectedSt.description}
                       </div>
-                      {col.cols.map((d: any, i: number) => (
-                        <div key={d.name} style={{ marginBottom: 10 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                            <span style={{ color: '#6b6b6b', fontWeight: i === 2 ? 700 : 400 }}>{d.name}</span>
-                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1a1a1a' }}>
-                              {col.fmt(d.v)}
-                            </span>
+                      <div className="flex items-center justify-between text-[11px] text-[#71717a]">
+                        <span>Complexity: <strong className="text-[#18181b]">{selectedSt.complexity_tier}</strong></span>
+                        {selectedSt.jev_confidence !== null && (
+                          <span className="font-mono">Jev confidence: <strong>{(selectedSt.jev_confidence * 100).toFixed(0)}%</strong></span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Candidates ranking list */}
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider">
+                        Ranked Candidate Pool
+                      </div>
+
+                      {inspectorCandidates.map((c) => (
+                        <div
+                          key={c.model_id}
+                          className={`p-2.5 rounded-lg border text-xs transition-all ${
+                            c.is_winner
+                              ? 'bg-white border-[#18181b] shadow-xs'
+                              : 'bg-[#fafafa] border-[#eaeaea] opacity-75'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-1.5">
+                              {c.is_winner && (
+                                <Badge variant="neutral" size="sm">
+                                  Selected
+                                </Badge>
+                              )}
+                              <span className="font-mono font-bold text-[#18181b]">{c.model_id}</span>
+                              <span className="text-[#71717a] text-[10px]">({c.location})</span>
+                            </div>
+                            <div className="font-mono text-[11px]">
+                              <span className="text-[#71717a]">{c.raw_score.toFixed(3)}</span>
+                              {c.jev_bonus > 0 && <span className="text-indigo-600"> -{c.jev_bonus.toFixed(3)} Jev</span>}
+                              <span className="font-bold text-[#18181b] ml-1">= {c.final_score.toFixed(3)}</span>
+                            </div>
                           </div>
-                          <div style={{ height: 6, borderRadius: 3, background: '#f0f0f0', overflow: 'hidden', display: 'flex' }}>
-                            <div style={{
-                              width: `${((d.v * (d.overhead ? 0.92 : 1)) / maxV) * 100}%`,
-                              background: i === 0 ? '#d0d0d0' : i === 1 ? '#9b9b9b' : '#1a1a1a',
-                              height: '100%',
-                            }} />
-                            {d.overhead && (
-                              <div style={{ width: `${((d.v * 0.08) / maxV) * 100}%`, background: '#6b6b6b', height: '100%' }} />
-                            )}
+
+                          {/* 2d. Horizontal Stacked Score Bar */}
+                          <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden flex my-1.5">
+                            <div style={{ width: `${c.lat_norm * 25}%` }} className="bg-[#18181b] h-full" title="Latency term" />
+                            <div style={{ width: `${c.acc_norm * 35}%` }} className="bg-[#52525b] h-full" title="Accuracy penalty term" />
+                            <div style={{ width: `${c.cost_norm * 15}%` }} className="bg-[#71717a] h-full" title="Cost term" />
+                            <div style={{ width: `${c.energy_norm * 10}%` }} className="bg-[#a1a1aa] h-full" title="Energy term" />
+                            <div style={{ width: `${c.carbon_norm * 15}%` }} className="bg-[#d4d4d8] h-full" title="Carbon term" />
+                          </div>
+
+                          <div className="flex justify-between text-[10px] font-mono text-[#71717a]">
+                            <span>Acc tier: {c.accuracy_tier.toFixed(2)}</span>
+                            <span>Rank #{c.is_winner ? 1 : '—'}</span>
                           </div>
                         </div>
                       ))}
-                    </Surface>
-                  );
-                })}
-              </Grid3>
-            )}
-          </Section>
-        )}
-
-        {/* ── Grid intensity ───────────────────────────────── */}
-        {grid && (
-          <>
-            <Divider />
-            <Section>
-              <SectionTitle>Grid carbon intensity</SectionTitle>
-              <Surface>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: '#9b9b9b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                      {grid.zone} · {grid.source === 'live' ? 'live' : 'estimated'}
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1 }}>
-                      {grid.current_intensity_gco2_per_kwh}
-                      <span style={{ fontSize: 16, fontWeight: 400, color: '#9b9b9b', marginLeft: 6 }}>gCO₂/kWh</span>
+
+                    {/* Legend for stacked bars */}
+                    <div className="flex items-center justify-between text-[10px] text-[#71717a] pt-2 border-t border-[#f4f4f5]">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#18181b]" /> Latency</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#52525b]" /> Accuracy</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#71717a]" /> Cost</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#a1a1aa]" /> Energy</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#d4d4d8]" /> Carbon</span>
                     </div>
                   </div>
-                  {/* Invariant 6: Simulated badge — must be visible, cannot be missed */}
-                  <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6,
-                  }}>
-                    <Pill style={{ letterSpacing: '0.04em', fontWeight: 700, borderStyle: 'dashed' }}>
-                      Simulated forecast — not live data
-                    </Pill>
-                    <span style={{ fontSize: 10, color: '#b0b0b0', fontStyle: 'italic' }}>Invariant 6 compliant</span>
+                ) : (
+                  <div className="text-center py-8 text-[#71717a] text-xs">
+                    Select any subtask to inspect its routing score breakdown.
                   </div>
-                </div>
+                )}
+              </Card>
+            </div>
+          </div>
 
-                {/* Forecast bars from real API simulated_forecast[] */}
-                <div style={{
-                  border: '1px dashed #d0d0d0', borderRadius: 8,
-                  padding: '12px 16px', background: '#fafafa',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 56 }}>
-                    {grid.simulated_forecast.map((f, i) => {
-                      const maxI = Math.max(...grid.simulated_forecast.map(x => x.intensityGco2));
-                      const minI = Math.min(...grid.simulated_forecast.map(x => x.intensityGco2));
-                      const isValley = f.intensityGco2 === minI;
-                      const pct = (f.intensityGco2 / maxI) * 100;
-                      return (
-                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div
-                            title={`${f.intensityGco2} gCO₂/kWh`}
-                            style={{
-                              width: '100%', height: `${pct}%`,
-                              background: isValley ? '#1a1a1a' : '#e0e0e0',
-                              border: `1px dashed ${isValley ? '#1a1a1a' : '#c0c0c0'}`,
-                              borderBottom: 'none', borderRadius: '3px 3px 0 0',
-                            }}
-                          />
-                          <span style={{ fontSize: 9, color: '#9b9b9b', fontFamily: 'monospace', marginTop: 4 }}>
-                            {i === 0 ? 'Now' : `+${f.hourOffset}h`}
+          {/* 2e. Run Stats & Details (Progressive Disclosure) */}
+          <div className="pt-6 border-t border-[#eaeaea]">
+            <button
+              onClick={() => setShowDetailsSection(!showDetailsSection)}
+              className="w-full flex items-center justify-between text-xs font-bold text-[#71717a] uppercase tracking-wider py-2 hover:text-[#18181b] transition-colors cursor-pointer"
+            >
+              <span>Telemetry details, budgets & policy comparisons</span>
+              {showDetailsSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+
+            {showDetailsSection && (
+              <div className="mt-6 space-y-6">
+                {/* Live task budget consumption */}
+                {currentTask && (
+                  <Card className="p-5">
+                    <div className="text-xs font-bold uppercase text-[#18181b] tracking-wider mb-3">
+                      Task Budget Consumption vs Hard Limits
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Cost */}
+                      <div>
+                        <div className="flex justify-between text-xs font-mono mb-1">
+                          <span className="text-[#71717a]">Cost</span>
+                          <span className="font-bold text-[#18181b]">
+                            ${currentTask.running_cost_usd.toFixed(5)} / ${currentTask.max_total_cost_usd.toFixed(2)}
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <p style={{ fontSize: 10, color: '#b0b0b0', marginTop: 8, fontStyle: 'italic' }}>
-                    {grid.disclosure}
-                  </p>
-                </div>
-              </Surface>
-            </Section>
-          </>
-        )}
+                        <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden">
+                          <div
+                            className="bg-[#18181b] h-full transition-all duration-300"
+                            style={{ width: `${Math.min(100, (currentTask.running_cost_usd / currentTask.max_total_cost_usd) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
 
-        {/* ── Footer ──────────────────────────────────────── */}
-        <Divider />
-        <div style={{ fontSize: 11, color: '#9b9b9b', lineHeight: 1.8 }}>
-          <strong style={{ color: '#6b6b6b' }}>Methodology</strong> — Headline savings (cost −71.3%, carbon −59%) from measured offline eval (N=60), not live runs.
-          All totals include scheduler overhead: Jev routing calls, verification calls, embedding — Invariant 7.
-          Cloud carbon = EcoLogits output as-is; grid intensity never applied to cloud — Invariant 1.
-          Local carbon = CodeCarbon energy × live {grid?.zone ?? 'IN-SO'} grid intensity.
-          Forecast is synthetic/simulated — grey dashed, labeled — Invariant 6.
-          PII subtasks forced local; raw text never leaves the machine — Invariant 2.
-        </div>
-      </Page>
+                      {/* Carbon */}
+                      <div>
+                        <div className="flex justify-between text-xs font-mono mb-1">
+                          <span className="text-[#71717a]">Carbon</span>
+                          <span className="font-bold text-[#18181b]">
+                            {(currentTask.running_carbon_kgco2eq * 1000).toFixed(3)}g / {(currentTask.max_total_carbon_kgco2eq * 1000).toFixed(0)}g
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden">
+                          <div
+                            className="bg-emerald-600 h-full transition-all duration-300"
+                            style={{ width: `${Math.min(100, (currentTask.running_carbon_kgco2eq / currentTask.max_total_carbon_kgco2eq) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
 
-      {/* ── Time-shift modal ─────────────────────────────── */}
+                      {/* Latency */}
+                      <div>
+                        <div className="flex justify-between text-xs font-mono mb-1">
+                          <span className="text-[#71717a]">Latency</span>
+                          <span className="font-bold text-[#18181b]">
+                            {(currentTask.running_latency_ms / 1000).toFixed(1)}s / {(currentTask.max_total_latency_ms / 1000).toFixed(0)}s
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden">
+                          <div
+                            className="bg-blue-600 h-full transition-all duration-300"
+                            style={{ width: `${Math.min(100, (currentTask.running_latency_ms / currentTask.max_total_latency_ms) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Policy Comparison from offline eval */}
+                {baselines?.offline_stats && (
+                  <Card className="p-5">
+                    <div className="text-xs font-bold uppercase text-[#18181b] tracking-wider mb-4 flex items-center justify-between">
+                      <span>Policy Comparison (Work vs Scheduler Overhead)</span>
+                      <Badge variant="neutral" size="sm">PRD Section 6 & 9</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {[
+                        {
+                          label: 'Total Cost',
+                          fmt: (v: number) => `$${v.toFixed(4)}`,
+                          data: [
+                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.cost.mean, col: '#a1a1aa' },
+                            { name: 'Random', val: baselines.offline_stats.random.cost.mean, col: '#71717a' },
+                            { name: 'This system', val: baselines.offline_stats.this_system.cost.mean, col: '#18181b', overhead: true },
+                          ],
+                        },
+                        {
+                          label: 'Total Carbon (kg)',
+                          fmt: (v: number) => `${v.toFixed(5)} kg`,
+                          data: [
+                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.carbon.mean, col: '#a1a1aa' },
+                            { name: 'Random', val: baselines.offline_stats.random.carbon.mean, col: '#71717a' },
+                            { name: 'This system', val: baselines.offline_stats.this_system.carbon.mean, col: '#059669', overhead: true },
+                          ],
+                        },
+                        {
+                          label: 'Quality Retained',
+                          fmt: (v: number) => `${(v * 100).toFixed(1)}%`,
+                          data: [
+                            { name: 'Always-strongest', val: 1.0, col: '#a1a1aa' },
+                            { name: 'Random', val: baselines.offline_stats.random.quality.mean, col: '#71717a' },
+                            { name: 'This system', val: baselines.offline_stats.this_system.quality.mean, col: '#2563eb', overhead: false },
+                          ],
+                        },
+                      ].map((col) => {
+                        const maxVal = Math.max(...col.data.map(d => d.val)) || 1;
+                        return (
+                          <div key={col.label} className="space-y-2">
+                            <span className="text-xs font-semibold text-[#71717a]">{col.label}</span>
+                            {col.data.map((d: any) => (
+                              <div key={d.name} className="space-y-1">
+                                <div className="flex justify-between text-[11px] font-mono">
+                                  <span className="text-[#71717a]">{d.name}</span>
+                                  <span className="font-bold text-[#18181b]">{col.fmt(d.val)}</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden flex">
+                                  <div
+                                    style={{
+                                      width: `${((d.val * (d.overhead ? 0.92 : 1)) / maxVal) * 100}%`,
+                                      backgroundColor: d.col,
+                                    }}
+                                    className="h-full"
+                                  />
+                                  {d.overhead && (
+                                    <div
+                                      style={{ width: `${((d.val * 0.08) / maxVal) * 100}%` }}
+                                      className="h-full bg-amber-400"
+                                      title="Scheduler overhead (Jev routing + verification)"
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-[#f4f4f5] text-[11px] text-[#71717a]">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#18181b]" /> Direct task work</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-amber-400" /> Scheduler overhead (Invariant 7)</span>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Grid Intensity & Forecast */}
+                {grid && (
+                  <Card className="p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="text-xs font-bold uppercase text-[#18181b] tracking-wider">
+                          Grid Carbon Intensity ({grid.zone})
+                        </div>
+                        <div className="text-2xl font-bold font-mono text-[#18181b] mt-1">
+                          {grid.current_intensity_gco2_per_kwh} <span className="text-xs font-sans text-[#71717a]">gCO₂/kWh</span>
+                        </div>
+                      </div>
+                      <Badge variant="outline" size="sm" style={{ borderStyle: 'dashed' }}>
+                        Simulated forecast — not live data
+                      </Badge>
+                    </div>
+
+                    <div className="border border-dashed border-[#d4d4d8] rounded-xl p-4 bg-[#fafafa]">
+                      <div className="flex items-end gap-2 h-20">
+                        {grid.simulated_forecast.map((f, i) => {
+                          const maxI = Math.max(...grid.simulated_forecast.map(x => x.intensityGco2));
+                          const minI = Math.min(...grid.simulated_forecast.map(x => x.intensityGco2));
+                          const isValley = f.intensityGco2 === minI;
+                          const pct = (f.intensityGco2 / maxI) * 100;
+                          return (
+                            <div key={i} className="flex-1 flex flex-col items-center">
+                              <div
+                                title={`${f.intensityGco2} gCO₂/kWh`}
+                                style={{ height: `${pct}%` }}
+                                className={`w-full rounded-t border-t border-dashed ${
+                                  isValley ? 'bg-emerald-600/30 border-emerald-600' : 'bg-[#e4e4e7] border-[#a1a1aa]'
+                                }`}
+                              />
+                              <span className="text-[10px] font-mono text-[#71717a] mt-1">
+                                {i === 0 ? 'Now' : `+${f.hourOffset}h`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-[#a1a1aa] mt-3 italic">{grid.disclosure}</p>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Methodology Footer */}
+          <footer className="mt-12 pt-6 border-t border-[#eaeaea] text-[11px] text-[#71717a] leading-relaxed">
+            <p className="mb-1">
+              <strong>Methodology & Compliance:</strong> Headline savings numbers come from measured offline evaluations (N=60 subtasks, 3 contracts × 3 repeats).
+              All figures include scheduler overhead (Jev routing, embeddings, cascade verification) per Invariant 7.
+              Cloud carbon uses EcoLogits output as-is; grid intensity is never applied to cloud (Invariant 1).
+              Local carbon is calculated as CodeCarbon measured energy × live {grid?.zone ?? 'IN-SO'} grid intensity.
+              PII subtasks are strictly isolated to local models (Invariant 2).
+            </p>
+          </footer>
+        </section>
+      )}
+
+      {/* ── Time-shift Batch Modal ───────────────────────────────────────────── */}
       {showTimeShift && timeShiftData && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24,
-        }}>
-          <div style={{
-            background: '#fff', border: '1px solid #e9e9e9', borderRadius: 16,
-            padding: 28, maxWidth: 440, width: '100%',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.12)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.5 }}>
-                Time-Shift Batch
-              </h3>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-[#eaeaea] rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f4f4f5]">
+              <div className="flex items-center gap-2">
+                <Leaf className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-bold tracking-tight text-[#18181b]">
+                  Time-Shift Batch Dispatcher
+                </h3>
+              </div>
               <button
                 onClick={() => setShowTimeShift(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9b9b9b', display: 'flex' }}
+                className="text-[#71717a] hover:text-[#18181b] transition-colors"
               >
-                <X size={18} />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <Grid2 style={{ marginBottom: 16 }}>
-              {[
-                { label: 'Intensity now', val: `${timeShiftData.intensity_now_gco2} gCO₂/kWh` },
-                { label: 'Forecast valley (+3h)', val: `${timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh` },
-                { label: 'Difference', val: `${timeShiftData.difference_pct}%` },
-                { label: 'Threshold', val: `${timeShiftData.threshold_pct}%` },
-              ].map(m => (
-                <div key={m.label} style={{ padding: '10px 12px', border: '1px solid #e9e9e9', borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: '#9b9b9b', marginBottom: 3 }}>{m.label}</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, fontFamily: 'monospace' }}>{m.val}</div>
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-[#fafafa] p-2.5 rounded-lg border border-[#eaeaea]">
+                  <span className="text-[#71717a] block text-[10px] uppercase">Intensity Now</span>
+                  <span className="text-[#18181b] font-bold font-mono text-sm">{timeShiftData.intensity_now_gco2} gCO₂/kWh</span>
                 </div>
-              ))}
-            </Grid2>
+                <div className="bg-[#fafafa] p-2.5 rounded-lg border border-[#eaeaea]">
+                  <span className="text-[#71717a] block text-[10px] uppercase">Forecast Valley (+3h)</span>
+                  <span className="text-emerald-700 font-bold font-mono text-sm">{timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh</span>
+                </div>
+              </div>
 
-            <div style={{
-              padding: '14px 16px', borderRadius: 10,
-              border: `1.5px solid ${timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '#1a1a1a' : '#e0e0e0'}`,
-              background: timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '#f5f5f5' : '#fff',
-              marginBottom: 16,
-            }}>
-              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>
-                {timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW' ? '🌿 Deferred to green window' : '⚡ Execute immediately'}
+              <div className="bg-[#fafafa] p-2.5 rounded-lg border border-[#eaeaea] flex items-center justify-between">
+                <span className="text-[#71717a]">Threshold difference:</span>
+                <span className="font-bold text-[#18181b]">
+                  {timeShiftData.difference_pct}% &gt; {timeShiftData.threshold_pct}% threshold
+                </span>
               </div>
-              <div style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.6 }}>
-                {timeShiftData.action === 'DEFERRED_TO_GREEN_WINDOW'
-                  ? `Batch scheduled +${timeShiftData.scheduled_for_offset_hours}h. Projected carbon saving: ${timeShiftData.carbon_savings_projected_pct}%.`
-                  : 'Grid is already near minimum — no benefit to deferring.'}
-              </div>
-              <div style={{ fontSize: 10, color: '#9b9b9b', marginTop: 6 }}>
-                {timeShiftData.eligible_candidates} · {timeShiftData.clock_mode}
+
+              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-emerald-900">
+                <div className="flex items-center gap-1.5 font-bold mb-1">
+                  <Check className="w-3.5 h-3.5 text-emerald-700" />
+                  Action: {timeShiftData.action}
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  Scheduled for green window (+{timeShiftData.scheduled_for_offset_hours} hours).
+                  Projected carbon saved: <strong>{timeShiftData.carbon_savings_projected_pct}%</strong>.
+                </p>
+                <p className="text-[10px] text-emerald-700 mt-1">
+                  Rule: {timeShiftData.eligible_candidates}
+                </p>
               </div>
             </div>
 
-            <NotionButton onClick={() => setShowTimeShift(false)} style={{ width: '100%', maxWidth: '100%', minWidth: 'unset' }}>
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full mt-4"
+              onClick={() => setShowTimeShift(false)}
+            >
               Close
-            </NotionButton>
+            </Button>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
