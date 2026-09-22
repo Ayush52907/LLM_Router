@@ -1,11 +1,10 @@
 'use client';
 
 /**
- * EcoRouter — Production Flow Redesign.
- * Section 1: Hero / Input (first viewport, calm landing, Claude/ChatGPT-style input, CenterFlow radial animation).
- * Section 2: Results (headline metrics, clean vertical subtask pipeline, route inspector, details).
- * Built with uniform component library: Badge, Button, Card, CenterFlow.
- * Zero mocked data — all metrics from real API endpoints.
+ * EcoRouter — Apple-Inspired Production Interface.
+ * Pure monochrome / black & white palette (#1d1d1f, #6e6e73, #f5f5f7, #ffffff).
+ * SF Pro typography stack, generous whitespace, unified component hierarchy.
+ * Zero mocked data — 100% connected to real orchestrator endpoints.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -24,7 +23,7 @@ import { BanterLoader } from '../components/BanterLoader';
 
 const API_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL ?? 'http://localhost:3001';
 
-// ── Contracts ─────────────────────────────────────────────────────────────────
+// ── Contract Presets ──────────────────────────────────────────────────────────
 
 const CONTRACT_ACME = `# MASTER SERVICES AGREEMENT — ACME CLOUD & OMNI RETAIL
 Effective Date: January 15, 2026 | Contract ID: MSA-2026-0891
@@ -119,7 +118,7 @@ interface Weights {
   carbon: number;
 }
 
-export default function EcoRouterProductionPage() {
+export default function EcoRouterApplePage() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [grid, setGrid] = useState<GridData | null>(null);
   const [baselines, setBaselines] = useState<BaselineData | null>(null);
@@ -244,7 +243,6 @@ export default function EcoRouterProductionPage() {
         setEscalations(data.escalations ?? []);
         if (data.subtasks.length > 0) setSelectedId(data.subtasks[0].id);
 
-        // Smooth scroll to results
         setTimeout(() => {
           resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 150);
@@ -270,153 +268,165 @@ export default function EcoRouterProductionPage() {
   const selectedEsc = selectedSt ? escalations.find(e => e.subtask_id === selectedSt.id) : null;
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-[#111111] flex flex-col font-sans antialiased selection:bg-[#111] selection:text-white">
+    <div className="min-h-screen bg-white text-[#1d1d1f] flex flex-col font-sans antialiased">
       {/* Full-screen loading overlay during run */}
-      {isRunning && <BanterLoader label="Running pipeline — Jev routing each subtask via five-factor formula…" />}
+      {isRunning && <BanterLoader label="Evaluating routing with Jev and scoring candidates…" />}
 
-      {/* ── Top quiet nav ────────────────────────────────────────────────────── */}
-      <header className="w-full border-b border-[#eaeaea] bg-white/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-[#18181b] flex items-center justify-center text-white font-bold text-xs">
-              E
-            </div>
-            <span className="font-semibold text-sm tracking-tight text-[#18181b]">EcoRouter</span>
-            <span className="text-xs text-[#71717a] hidden sm:inline">· Carbon-aware LLM scheduler</span>
+      {/* ── Apple-Style Minimal Header ───────────────────────────────────────── */}
+      <header className="w-full border-b border-[#e5e5e7] bg-white/90 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-sm tracking-tight text-[#1d1d1f]">EcoRouter</span>
+            <span className="text-xs text-[#86868b]">·</span>
+            <span className="text-xs text-[#6e6e73]">Intelligent Carbon-Aware Dispatch</span>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-[#71717a]">
+          <div className="flex items-center gap-3 text-xs text-[#6e6e73]">
             {grid && (
-              <Badge variant="outline" size="sm">
-                <Leaf className="w-3 h-3 text-emerald-600 mr-0.5" />
-                <span>{grid.zone}</span>
-                <span className="font-mono text-[#18181b] ml-1">{grid.current_intensity_gco2_per_kwh} gCO₂/kWh</span>
-              </Badge>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#f5f5f7] text-[#1d1d1f] font-mono text-[11px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1d1d1f]" />
+                {grid.zone} · {grid.current_intensity_gco2_per_kwh} gCO₂/kWh
+              </span>
             )}
-            <div className="flex items-center gap-1.5 pl-2 border-l border-[#eaeaea]">
-              <span className={`w-2 h-2 rounded-full ${apiOnline ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-              <span className="hidden md:inline">{apiOnline ? 'Live API' : 'Connecting'}</span>
+            <div className="flex items-center gap-1.5 text-[11px] text-[#86868b]">
+              <span className={`w-1.5 h-1.5 rounded-full ${apiOnline ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+              <span>{apiOnline ? 'Online' : 'Offline'}</span>
             </div>
           </div>
         </div>
       </header>
 
       {/* ── SECTION 1: Hero / Input (First Viewport) ────────────────────────── */}
-      <section className="relative min-h-[calc(100vh-56px)] flex flex-col justify-center items-center px-4 py-12">
-        <CenterFlow className="w-full max-w-4xl flex flex-col items-center">
-          {/* Calm Hero Title */}
-          <div className="text-center mb-8 max-w-xl mx-auto">
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#111111] mb-2.5">
-              Where intelligence meets efficiency.
+      <section className="relative min-h-[calc(100vh-56px)] flex flex-col justify-center items-center px-6 py-12">
+        <CenterFlow className="w-full max-w-3xl flex flex-col items-center">
+          {/* Apple Calm Headline */}
+          <div className="text-center mb-8 max-w-lg mx-auto">
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#1d1d1f] mb-2">
+              Optimize Every Step.
             </h1>
-            <p className="text-sm sm:text-base text-[#666666] leading-relaxed">
-              Route each contract subtask to the right model, location, and timing.
-              Savings proven through verified carbon and cost telemetry.
+            <p className="text-sm text-[#6e6e73] leading-relaxed">
+              Decompose complex contracts and route each subtask to the optimal model,
+              balancing cost, latency, and carbon footprint.
             </p>
           </div>
 
-          {/* Large Chat-Style Input Box (Claude / ChatGPT style) */}
-          <div className="w-full max-w-2xl bg-white border border-[#eaeaea] rounded-[20px] shadow-[0_8px_30px_rgba(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] transition-all duration-200 focus-within:border-[#a1a1aa] focus-within:shadow-[0_12px_40px_rgba(0,0,0,0.07)] p-4">
-            {/* Top preset bar inside the box */}
-            <div className="flex items-center justify-between pb-3 mb-2 border-b border-[#f4f4f5] text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#a1a1aa] font-medium mr-1 text-[11px] uppercase tracking-wider">Preset:</span>
+          {/* Apple-Style Input Box Container */}
+          <div className="w-full max-w-2xl bg-white border border-[#e5e5e7] rounded-3xl shadow-[0_4px_24px_rgba(0,0,0,0.03)] transition-all duration-200 focus-within:border-[#1d1d1f] focus-within:shadow-[0_8px_32px_rgba(0,0,0,0.06)] p-5">
+            {/* Apple Segmented Control for Presets */}
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#f5f5f7]">
+              <div className="inline-flex p-0.5 rounded-full bg-[#f5f5f7]">
                 <button
                   type="button"
                   onClick={() => { setCustomPrompt(CONTRACT_ACME); setActivePreset('acme'); }}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${activePreset === 'acme' ? 'bg-[#f4f4f5] text-[#18181b] font-semibold' : 'text-[#71717a] hover:text-[#18181b]'}`}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    activePreset === 'acme'
+                      ? 'bg-white text-[#1d1d1f] shadow-xs font-semibold'
+                      : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  }`}
                 >
-                  Acme Cloud (MSA)
+                  Acme Cloud
                 </button>
                 <button
                   type="button"
                   onClick={() => { setCustomPrompt(CONTRACT_CYBERDYNE); setActivePreset('cyberdyne'); }}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${activePreset === 'cyberdyne' ? 'bg-[#f4f4f5] text-[#18181b] font-semibold' : 'text-[#71717a] hover:text-[#18181b]'}`}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    activePreset === 'cyberdyne'
+                      ? 'bg-white text-[#1d1d1f] shadow-xs font-semibold'
+                      : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  }`}
                 >
-                  CyberDyne (Vendor)
+                  CyberDyne
                 </button>
                 <button
                   type="button"
                   onClick={() => { setActivePreset('custom'); }}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${activePreset === 'custom' ? 'bg-[#f4f4f5] text-[#18181b] font-semibold' : 'text-[#71717a] hover:text-[#18181b]'}`}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    activePreset === 'custom'
+                      ? 'bg-white text-[#1d1d1f] shadow-xs font-semibold'
+                      : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  }`}
                 >
                   Custom
                 </button>
               </div>
 
-              <span className="font-mono text-[11px] text-[#a1a1aa]">
+              <span className="font-mono text-[11px] text-[#86868b]">
                 ~{Math.round(customPrompt.length / 4)} tokens
               </span>
             </div>
 
-            {/* Comfortable large textarea */}
+            {/* Clean spacious textarea */}
             <textarea
               rows={4}
               value={customPrompt}
               onChange={(e) => { setCustomPrompt(e.target.value); setActivePreset('custom'); }}
-              placeholder="Paste a contract, vendor agreement, or describe the task..."
-              className="w-full resize-none border-none outline-none font-sans text-sm text-[#18181b] placeholder:text-[#a1a1aa] leading-relaxed bg-transparent"
+              placeholder="Paste contract text or enter instructions..."
+              className="w-full resize-none border-none outline-none font-sans text-sm text-[#1d1d1f] placeholder:text-[#86868b] leading-relaxed bg-transparent"
             />
 
-            {/* Attached parameter toolbar */}
-            <div className="pt-3 border-t border-[#f4f4f5] flex flex-wrap items-center justify-between gap-3">
-              {/* Parameter pills */}
+            {/* Attached Parameter Toolbar */}
+            <div className="pt-3 border-t border-[#f5f5f7] flex flex-wrap items-center justify-between gap-3">
+              {/* Apple-style pill toggles */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setIsUrgent(!isUrgent)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
-                    isUrgent ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b] border border-transparent'
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    isUrgent
+                      ? 'bg-[#1d1d1f] text-white'
+                      : 'bg-[#f5f5f7] text-[#6e6e73] hover:text-[#1d1d1f]'
                   }`}
-                  title="Prioritizes latency over carbon/cost"
                 >
-                  <Flame className="w-3.5 h-3.5" />
-                  <span>{isUrgent ? 'Urgent priority' : 'Normal priority'}</span>
+                  <Flame className="w-3 h-3" />
+                  <span>Urgent</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsPiiGuard(!isPiiGuard)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
-                    isPiiGuard ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b] border border-transparent'
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    isPiiGuard
+                      ? 'bg-[#1d1d1f] text-white'
+                      : 'bg-[#f5f5f7] text-[#6e6e73] hover:text-[#1d1d1f]'
                   }`}
-                  title="PII subtasks strictly stay on local hardware"
                 >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>{isPiiGuard ? 'PII Guard on' : 'PII Guard off'}</span>
+                  <Lock className="w-3 h-3" />
+                  <span>PII Guard</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsFaultInjected(!isFaultInjected)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
-                    isFaultInjected ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b] border border-transparent'
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    isFaultInjected
+                      ? 'bg-[#1d1d1f] text-white'
+                      : 'bg-[#f5f5f7] text-[#6e6e73] hover:text-[#1d1d1f]'
                   }`}
-                  title="Inject generation failure to demo cascade escalation"
                 >
-                  <ShieldAlert className="w-3.5 h-3.5" />
-                  <span>{isFaultInjected ? 'Fault armed' : 'No fault'}</span>
+                  <ShieldAlert className="w-3 h-3" />
+                  <span>Fault Injection</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowWeightsDrawer(!showWeightsDrawer)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${
-                    showWeightsDrawer ? 'bg-[#e4e4e7] text-[#18181b]' : 'bg-[#f4f4f5] text-[#71717a] hover:text-[#18181b]'
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    showWeightsDrawer
+                      ? 'bg-[#e5e5e7] text-[#1d1d1f]'
+                      : 'bg-[#f5f5f7] text-[#6e6e73] hover:text-[#1d1d1f]'
                   }`}
                 >
-                  <Sliders className="w-3.5 h-3.5" />
+                  <Sliders className="w-3 h-3" />
                   <span>Weights</span>
                 </button>
               </div>
 
-              {/* Action buttons */}
+              {/* Action Buttons */}
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleTimeShift}
-                  title="Analyze deferring batch jobs to greener grid windows"
                 >
                   <FastForward className="w-3 h-3 mr-0.5" />
                   Time-shift
@@ -434,14 +444,14 @@ export default function EcoRouterProductionPage() {
               </div>
             </div>
 
-            {/* Weights Drawer (Inline inside input container) */}
+            {/* Weights Drawer */}
             {showWeightsDrawer && (
-              <div className="mt-3 pt-3 border-t border-[#f4f4f5] grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="mt-4 pt-3 border-t border-[#f5f5f7] grid grid-cols-2 sm:grid-cols-5 gap-3">
                 {(Object.keys(weights) as (keyof Weights)[]).map((k) => (
-                  <div key={k} className="flex flex-col gap-1">
+                  <div key={k} className="flex flex-col gap-1.5">
                     <div className="flex justify-between text-[11px]">
-                      <span className="text-[#71717a] capitalize">{k}</span>
-                      <span className="font-mono font-bold text-[#18181b]">{weights[k].toFixed(2)}</span>
+                      <span className="text-[#6e6e73] capitalize">{k}</span>
+                      <span className="font-mono font-bold text-[#1d1d1f]">{weights[k].toFixed(2)}</span>
                     </div>
                     <input
                       type="range"
@@ -450,7 +460,7 @@ export default function EcoRouterProductionPage() {
                       step={0.05}
                       value={weights[k]}
                       onChange={(e) => setWeights({ ...weights, [k]: parseFloat(e.target.value) })}
-                      className="w-full accent-[#18181b]"
+                      className="w-full"
                     />
                   </div>
                 ))}
@@ -458,21 +468,21 @@ export default function EcoRouterProductionPage() {
             )}
           </div>
 
-          {/* Error notice if run failed */}
+          {/* Error Message */}
           {runError && (
-            <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center gap-2 max-w-lg">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
+            <div className="mt-4 p-3 bg-[#f5f5f7] border border-[#d2d2d7] rounded-xl text-xs text-[#1d1d1f] flex items-center gap-2 max-w-lg">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-[#1d1d1f]" />
               <span>{runError}</span>
             </div>
           )}
 
-          {/* Quiet scroll indicator if results already exist */}
+          {/* Scroll cue if results ready */}
           {subtasks.length > 0 && (
             <button
               onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="mt-8 text-xs text-[#71717a] hover:text-[#18181b] flex items-center gap-1 transition-colors cursor-pointer"
+              className="mt-8 text-xs text-[#6e6e73] hover:text-[#1d1d1f] flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <span>View latest execution telemetry</span>
+              <span>View execution results</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
           )}
@@ -481,58 +491,58 @@ export default function EcoRouterProductionPage() {
 
       {/* ── SECTION 2: Results (Revealed on Scroll or Post-Run) ──────────────── */}
       {subtasks.length > 0 && (
-        <section ref={resultsRef} className="max-w-6xl mx-auto w-full px-6 py-12 border-t border-[#eaeaea]">
-          {/* 2a. Headline metrics band */}
+        <section ref={resultsRef} className="max-w-5xl mx-auto w-full px-6 py-16 border-t border-[#e5e5e7]">
+          {/* 2a. Headline Metrics Band */}
           {baselines?.measured_summary && (
-            <div className="mb-10">
+            <div className="mb-12">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold text-[#71717a] uppercase tracking-wider">
-                  Verified Outcome vs Always-Strongest (Baseline A)
+                <span className="text-xs font-semibold text-[#86868b] uppercase tracking-wider">
+                  Measured Performance vs Always-Strongest (Baseline A)
                 </span>
-                <Badge variant="neutral" size="sm">
+                <Badge variant="subtle" size="sm">
                   Measured Offline N=60
                 </Badge>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Cost */}
-                <Card className="p-5">
-                  <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider mb-1">Cost Saved</div>
-                  <div className="text-3xl font-extrabold text-[#18181b] tracking-tight">
+                {/* Cost Saved */}
+                <Card className="p-6">
+                  <div className="text-[11px] font-semibold uppercase text-[#6e6e73] tracking-wider mb-2">Cost Saved</div>
+                  <div className="text-4xl font-semibold tracking-tight text-[#1d1d1f]">
                     +{baselines.measured_summary.cost_saved_pct.toFixed(1)}%
                   </div>
-                  <div className="text-xs text-[#71717a] mt-1">vs Always-strongest baseline ($0.092 vs $0.026)</div>
+                  <div className="text-xs text-[#86868b] mt-2">vs Always-strongest ($0.092 vs $0.026)</div>
                 </Card>
 
-                {/* Carbon */}
-                <Card className="p-5">
-                  <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider mb-1">Carbon Saved</div>
-                  <div className="text-3xl font-extrabold text-emerald-700 tracking-tight">
+                {/* Carbon Saved */}
+                <Card className="p-6">
+                  <div className="text-[11px] font-semibold uppercase text-[#6e6e73] tracking-wider mb-2">Carbon Saved</div>
+                  <div className="text-4xl font-semibold tracking-tight text-[#1d1d1f]">
                     +{baselines.measured_summary.carbon_saved_pct.toFixed(1)}%
                   </div>
-                  <div className="text-xs text-[#71717a] mt-1">EcoLogits (cloud) · CodeCarbon (local)</div>
+                  <div className="text-xs text-[#86868b] mt-2">EcoLogits (cloud) · CodeCarbon (local)</div>
                 </Card>
 
-                {/* Quality */}
-                <Card className="p-5">
-                  <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider mb-1">Quality Retained</div>
-                  <div className="text-3xl font-extrabold text-blue-700 tracking-tight">
+                {/* Quality Retained */}
+                <Card className="p-6">
+                  <div className="text-[11px] font-semibold uppercase text-[#6e6e73] tracking-wider mb-2">Quality Retained</div>
+                  <div className="text-4xl font-semibold tracking-tight text-[#1d1d1f]">
                     {baselines.measured_summary.quality_retained_pct.toFixed(1)}%
                   </div>
-                  <div className="text-xs text-[#71717a] mt-1">per rubric & MMLU benchmark accuracy tiers</div>
+                  <div className="text-xs text-[#86868b] mt-2">per rubric & benchmark accuracy tiers</div>
                 </Card>
               </div>
             </div>
           )}
 
-          {/* 2b & 2c: Subtask Pipeline + Route Inspector (2-Column Grid) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mb-10">
-            {/* Left 7 cols: Subtask Pipeline (Clean vertical timeline/list) */}
+          {/* 2b & 2c: Subtask Pipeline + Route Inspector */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mb-12">
+            {/* Left 7 cols: Subtask Pipeline (Vertical list) */}
             <div className="lg:col-span-7 flex flex-col gap-3">
               <div className="flex items-center justify-between pb-2 mb-1">
-                <h2 className="text-sm font-bold text-[#18181b] tracking-tight">Subtask Execution Pipeline</h2>
-                <span className="text-xs text-[#71717a]">
-                  {subtasks.filter(s => s.status === 'done').length}/{subtasks.length} completed
+                <h2 className="text-sm font-semibold text-[#1d1d1f]">Subtasks ({subtasks.length})</h2>
+                <span className="text-xs text-[#86868b]">
+                  {subtasks.filter(s => s.status === 'done').length} completed
                 </span>
               </div>
 
@@ -545,71 +555,70 @@ export default function EcoRouterProductionPage() {
                   <div
                     key={st.id}
                     onClick={() => setSelectedId(st.id)}
-                    className={`p-4 rounded-xl border transition-all duration-150 cursor-pointer text-left ${
+                    className={`p-4 rounded-2xl border transition-all duration-150 cursor-pointer text-left ${
                       isSelected
-                        ? 'bg-white border-[#18181b] shadow-sm ring-1 ring-[#18181b]'
-                        : 'bg-white border-[#eaeaea] hover:border-[#d4d4d8]'
+                        ? 'bg-white border-[#1d1d1f] shadow-xs'
+                        : 'bg-[#ffffff] border-[#e5e5e7] hover:border-[#d2d2d7]'
                     }`}
                   >
                     {/* Primary Line: Step number + Description + Status */}
                     <div className="flex items-start justify-between gap-3 mb-1.5">
                       <div className="flex items-start gap-2.5">
                         <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${
-                          isSelected ? 'bg-[#18181b] text-white' : 'bg-[#f4f4f5] text-[#71717a]'
+                          isSelected ? 'bg-[#1d1d1f] text-white' : 'bg-[#f5f5f7] text-[#6e6e73]'
                         }`}>
                           {i + 1}
                         </span>
-                        <span className="text-sm font-semibold text-[#18181b] leading-tight">
+                        <span className="text-sm font-medium text-[#1d1d1f] leading-snug">
                           {st.description}
                         </span>
                       </div>
 
                       <Badge
-                        variant={st.status === 'done' ? 'success' : st.status === 'failed' ? 'warning' : 'neutral'}
+                        variant={st.status === 'done' ? 'dark' : 'neutral'}
                         size="sm"
                       >
-                        {st.status === 'done' && <CheckCircle2 className="w-2.5 h-2.5" />}
+                        {st.status === 'done' && <Check className="w-2.5 h-2.5" />}
                         {st.status}
                       </Badge>
                     </div>
 
                     {/* Secondary Line: Model routed + location icon */}
-                    <div className="flex items-center gap-2 text-xs text-[#71717a] ml-7 mb-2">
+                    <div className="flex items-center gap-2 text-xs text-[#6e6e73] ml-7 mb-2">
                       {st.routed_model ? (
-                        <div className="flex items-center gap-1 font-mono font-medium text-[#18181b]">
+                        <div className="flex items-center gap-1 font-mono font-medium text-[#1d1d1f]">
                           {st.routed_location === 'local' ? (
-                            <HardDrive className="w-3 h-3 text-emerald-600" />
+                            <HardDrive className="w-3 h-3 text-[#1d1d1f]" />
                           ) : (
-                            <Cloud className="w-3 h-3 text-blue-600" />
+                            <Cloud className="w-3 h-3 text-[#6e6e73]" />
                           )}
                           <span>{st.routed_model}</span>
-                          <span className="text-[#a1a1aa] font-sans font-normal">({st.routed_location})</span>
+                          <span className="text-[#86868b] font-sans font-normal">({st.routed_location})</span>
                         </div>
                       ) : (
-                        <span className="text-[#a1a1aa] italic">Routing decision pending...</span>
+                        <span className="text-[#86868b] italic">Pending route...</span>
                       )}
 
-                      {/* Escalation transition visual */}
+                      {/* Escalation transition */}
                       {esc && (
-                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[11px] font-semibold border border-amber-200">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f5f5f7] text-[#1d1d1f] text-[11px] font-medium border border-[#e5e5e7]">
                           <span>{esc.from_model}</span>
                           <ArrowRight className="w-3 h-3" />
                           <span>{esc.to_model}</span>
-                          <span className="text-[10px] font-normal text-amber-700">({esc.reason_code})</span>
                         </div>
                       )}
 
                       {isPii && (
-                        <Badge variant="warning" size="sm">
+                        <Badge variant="outline" size="sm">
                           <Lock className="w-2.5 h-2.5" />
                           Forced local (PII)
                         </Badge>
                       )}
                     </div>
 
-                    {/* Tertiary Line: Lighter monospace telemetry */}
-                    <div className="flex items-center gap-3 text-[11px] text-[#a1a1aa] font-mono ml-7">
-                      <span className="text-[#71717a] font-sans">Tier: <strong>{st.complexity_tier}</strong></span>
+                    {/* Tertiary Line: Telemetry */}
+                    <div className="flex items-center gap-3 text-[11px] text-[#86868b] font-mono ml-7">
+                      <span className="text-[#6e6e73] font-sans">Tier: {st.complexity_tier}</span>
                       {st.actual_latency_ms !== null && (
                         <span>{(st.actual_latency_ms / 1000).toFixed(1)}s</span>
                       )}
@@ -620,8 +629,8 @@ export default function EcoRouterProductionPage() {
                         <span>{(st.actual_carbon_kgco2eq * 1000).toFixed(4)}g CO₂</span>
                       )}
                       {st.verification_pass !== null && (
-                        <span className={st.verification_pass ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>
-                          {st.verification_pass ? '✓ verified' : '✗ failed'}
+                        <span className={st.verification_pass ? 'text-[#1d1d1f] font-medium' : 'text-[#86868b]'}>
+                          {st.verification_pass ? '✓ verified' : '✗ unverified'}
                         </span>
                       )}
                     </div>
@@ -633,14 +642,14 @@ export default function EcoRouterProductionPage() {
             {/* Right 5 cols: Route Inspector & Five-Factor Breakdown */}
             <div className="lg:col-span-5 sticky top-20">
               <Card className="p-5">
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#eaeaea]">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#f5f5f7]">
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#18181b]">Route Inspector</h3>
-                    <p className="text-[11px] text-[#71717a]">Five-factor scoring telemetry · Not a black box</p>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-[#1d1d1f]">Route Inspector</h3>
+                    <p className="text-[11px] text-[#86868b]">Five-Factor Scoring Breakdown</p>
                   </div>
                   {selectedSt && (
-                    <Badge variant={selectedSt.pii_class === 'raw_pii' ? 'warning' : 'neutral'} size="sm">
-                      {selectedSt.pii_class === 'raw_pii' ? 'PII locked' : 'Candidate audit'}
+                    <Badge variant="subtle" size="sm">
+                      {selectedSt.pii_class === 'raw_pii' ? 'PII isolated' : 'Evaluation'}
                     </Badge>
                   )}
                 </div>
@@ -648,12 +657,12 @@ export default function EcoRouterProductionPage() {
                 {selectedSt ? (
                   <div className="space-y-4">
                     {/* Selected node summary */}
-                    <div className="bg-[#f4f4f5] p-3 rounded-lg border border-[#e4e4e7]">
-                      <div className="text-xs font-semibold text-[#18181b] mb-1">
+                    <div className="bg-[#f5f5f7] p-3 rounded-xl">
+                      <div className="text-xs font-medium text-[#1d1d1f] mb-1">
                         {selectedSt.description}
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-[#71717a]">
-                        <span>Complexity: <strong className="text-[#18181b]">{selectedSt.complexity_tier}</strong></span>
+                      <div className="flex items-center justify-between text-[11px] text-[#6e6e73]">
+                        <span>Complexity: <strong className="text-[#1d1d1f]">{selectedSt.complexity_tier}</strong></span>
                         {selectedSt.jev_confidence !== null && (
                           <span className="font-mono">Jev confidence: <strong>{(selectedSt.jev_confidence * 100).toFixed(0)}%</strong></span>
                         )}
@@ -662,56 +671,56 @@ export default function EcoRouterProductionPage() {
 
                     {/* Candidates ranking list */}
                     <div className="space-y-2">
-                      <div className="text-[11px] font-bold uppercase text-[#71717a] tracking-wider">
-                        Ranked Candidate Pool
+                      <div className="text-[11px] font-semibold uppercase text-[#86868b] tracking-wider">
+                        Candidate Scoring
                       </div>
 
                       {inspectorCandidates.map((c) => (
                         <div
                           key={c.model_id}
-                          className={`p-2.5 rounded-lg border text-xs transition-all ${
+                          className={`p-3 rounded-xl border text-xs transition-all ${
                             c.is_winner
-                              ? 'bg-white border-[#18181b] shadow-xs'
-                              : 'bg-[#fafafa] border-[#eaeaea] opacity-75'
+                              ? 'bg-white border-[#1d1d1f]'
+                              : 'bg-[#ffffff] border-[#e5e5e7] opacity-60'
                           }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
                             <div className="flex items-center gap-1.5">
                               {c.is_winner && (
-                                <Badge variant="neutral" size="sm">
+                                <Badge variant="dark" size="sm">
                                   Selected
                                 </Badge>
                               )}
-                              <span className="font-mono font-bold text-[#18181b]">{c.model_id}</span>
-                              <span className="text-[#71717a] text-[10px]">({c.location})</span>
+                              <span className="font-mono font-medium text-[#1d1d1f]">{c.model_id}</span>
+                              <span className="text-[#86868b] text-[10px]">({c.location})</span>
                             </div>
                             <div className="font-mono text-[11px]">
-                              <span className="text-[#71717a]">{c.raw_score.toFixed(3)}</span>
-                              {c.jev_bonus > 0 && <span className="text-indigo-600"> -{c.jev_bonus.toFixed(3)} Jev</span>}
-                              <span className="font-bold text-[#18181b] ml-1">= {c.final_score.toFixed(3)}</span>
+                              <span className="text-[#86868b]">{c.raw_score.toFixed(3)}</span>
+                              {c.jev_bonus > 0 && <span className="text-[#1d1d1f]"> -{c.jev_bonus.toFixed(3)} Jev</span>}
+                              <span className="font-semibold text-[#1d1d1f] ml-1">= {c.final_score.toFixed(3)}</span>
                             </div>
                           </div>
 
-                          {/* 2d. Horizontal Stacked Score Bar */}
-                          <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden flex my-1.5">
-                            <div style={{ width: `${c.lat_norm * 25}%` }} className="bg-[#18181b] h-full" title="Latency term" />
+                          {/* Monochrome Stacked Score Bar */}
+                          <div className="w-full h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden flex my-2">
+                            <div style={{ width: `${c.lat_norm * 25}%` }} className="bg-[#1d1d1f] h-full" title="Latency term" />
                             <div style={{ width: `${c.acc_norm * 35}%` }} className="bg-[#52525b] h-full" title="Accuracy penalty term" />
                             <div style={{ width: `${c.cost_norm * 15}%` }} className="bg-[#71717a] h-full" title="Cost term" />
                             <div style={{ width: `${c.energy_norm * 10}%` }} className="bg-[#a1a1aa] h-full" title="Energy term" />
                             <div style={{ width: `${c.carbon_norm * 15}%` }} className="bg-[#d4d4d8] h-full" title="Carbon term" />
                           </div>
 
-                          <div className="flex justify-between text-[10px] font-mono text-[#71717a]">
-                            <span>Acc tier: {c.accuracy_tier.toFixed(2)}</span>
+                          <div className="flex justify-between text-[10px] font-mono text-[#86868b]">
+                            <span>Accuracy tier: {c.accuracy_tier.toFixed(2)}</span>
                             <span>Rank #{c.is_winner ? 1 : '—'}</span>
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    {/* Legend for stacked bars */}
-                    <div className="flex items-center justify-between text-[10px] text-[#71717a] pt-2 border-t border-[#f4f4f5]">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#18181b]" /> Latency</span>
+                    {/* Legend */}
+                    <div className="flex items-center justify-between text-[10px] text-[#86868b] pt-2 border-t border-[#f5f5f7]">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#1d1d1f]" /> Latency</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#52525b]" /> Accuracy</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#71717a]" /> Cost</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#a1a1aa]" /> Energy</span>
@@ -719,8 +728,8 @@ export default function EcoRouterProductionPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-[#71717a] text-xs">
-                    Select any subtask to inspect its routing score breakdown.
+                  <div className="text-center py-8 text-[#86868b] text-xs">
+                    Select a subtask on the left to inspect its routing metrics.
                   </div>
                 )}
               </Card>
@@ -728,35 +737,35 @@ export default function EcoRouterProductionPage() {
           </div>
 
           {/* 2e. Run Stats & Details (Progressive Disclosure) */}
-          <div className="pt-6 border-t border-[#eaeaea]">
+          <div className="pt-6 border-t border-[#e5e5e7]">
             <button
               onClick={() => setShowDetailsSection(!showDetailsSection)}
-              className="w-full flex items-center justify-between text-xs font-bold text-[#71717a] uppercase tracking-wider py-2 hover:text-[#18181b] transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between text-xs font-semibold text-[#6e6e73] uppercase tracking-wider py-2 hover:text-[#1d1d1f] transition-colors cursor-pointer"
             >
-              <span>Telemetry details, budgets & policy comparisons</span>
+              <span>Budgets, Telemetry & Policy Comparisons</span>
               {showDetailsSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
 
             {showDetailsSection && (
               <div className="mt-6 space-y-6">
-                {/* Live task budget consumption */}
+                {/* Live Task Budget Limits */}
                 {currentTask && (
-                  <Card className="p-5">
-                    <div className="text-xs font-bold uppercase text-[#18181b] tracking-wider mb-3">
-                      Task Budget Consumption vs Hard Limits
+                  <Card className="p-6">
+                    <div className="text-xs font-semibold uppercase text-[#1d1d1f] tracking-wider mb-4">
+                      Execution Budget Consumption
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Cost */}
                       <div>
-                        <div className="flex justify-between text-xs font-mono mb-1">
-                          <span className="text-[#71717a]">Cost</span>
-                          <span className="font-bold text-[#18181b]">
+                        <div className="flex justify-between text-xs font-mono mb-1.5">
+                          <span className="text-[#6e6e73]">Cost</span>
+                          <span className="font-semibold text-[#1d1d1f]">
                             ${currentTask.running_cost_usd.toFixed(5)} / ${currentTask.max_total_cost_usd.toFixed(2)}
                           </span>
                         </div>
-                        <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden">
+                        <div className="w-full h-1 bg-[#f5f5f7] rounded-full overflow-hidden">
                           <div
-                            className="bg-[#18181b] h-full transition-all duration-300"
+                            className="bg-[#1d1d1f] h-full transition-all duration-300"
                             style={{ width: `${Math.min(100, (currentTask.running_cost_usd / currentTask.max_total_cost_usd) * 100)}%` }}
                           />
                         </div>
@@ -764,15 +773,15 @@ export default function EcoRouterProductionPage() {
 
                       {/* Carbon */}
                       <div>
-                        <div className="flex justify-between text-xs font-mono mb-1">
-                          <span className="text-[#71717a]">Carbon</span>
-                          <span className="font-bold text-[#18181b]">
+                        <div className="flex justify-between text-xs font-mono mb-1.5">
+                          <span className="text-[#6e6e73]">Carbon</span>
+                          <span className="font-semibold text-[#1d1d1f]">
                             {(currentTask.running_carbon_kgco2eq * 1000).toFixed(3)}g / {(currentTask.max_total_carbon_kgco2eq * 1000).toFixed(0)}g
                           </span>
                         </div>
-                        <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden">
+                        <div className="w-full h-1 bg-[#f5f5f7] rounded-full overflow-hidden">
                           <div
-                            className="bg-emerald-600 h-full transition-all duration-300"
+                            className="bg-[#1d1d1f] h-full transition-all duration-300"
                             style={{ width: `${Math.min(100, (currentTask.running_carbon_kgco2eq / currentTask.max_total_carbon_kgco2eq) * 100)}%` }}
                           />
                         </div>
@@ -780,15 +789,15 @@ export default function EcoRouterProductionPage() {
 
                       {/* Latency */}
                       <div>
-                        <div className="flex justify-between text-xs font-mono mb-1">
-                          <span className="text-[#71717a]">Latency</span>
-                          <span className="font-bold text-[#18181b]">
+                        <div className="flex justify-between text-xs font-mono mb-1.5">
+                          <span className="text-[#6e6e73]">Latency</span>
+                          <span className="font-semibold text-[#1d1d1f]">
                             {(currentTask.running_latency_ms / 1000).toFixed(1)}s / {(currentTask.max_total_latency_ms / 1000).toFixed(0)}s
                           </span>
                         </div>
-                        <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden">
+                        <div className="w-full h-1 bg-[#f5f5f7] rounded-full overflow-hidden">
                           <div
-                            className="bg-blue-600 h-full transition-all duration-300"
+                            className="bg-[#1d1d1f] h-full transition-all duration-300"
                             style={{ width: `${Math.min(100, (currentTask.running_latency_ms / currentTask.max_total_latency_ms) * 100)}%` }}
                           />
                         </div>
@@ -799,10 +808,10 @@ export default function EcoRouterProductionPage() {
 
                 {/* Policy Comparison from offline eval */}
                 {baselines?.offline_stats && (
-                  <Card className="p-5">
-                    <div className="text-xs font-bold uppercase text-[#18181b] tracking-wider mb-4 flex items-center justify-between">
-                      <span>Policy Comparison (Work vs Scheduler Overhead)</span>
-                      <Badge variant="neutral" size="sm">PRD Section 6 & 9</Badge>
+                  <Card className="p-6">
+                    <div className="text-xs font-semibold uppercase text-[#1d1d1f] tracking-wider mb-4 flex items-center justify-between">
+                      <span>Offline Policy Comparison</span>
+                      <Badge variant="subtle" size="sm">N=60 Subtasks</Badge>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -811,41 +820,41 @@ export default function EcoRouterProductionPage() {
                           label: 'Total Cost',
                           fmt: (v: number) => `$${v.toFixed(4)}`,
                           data: [
-                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.cost.mean, col: '#a1a1aa' },
-                            { name: 'Random', val: baselines.offline_stats.random.cost.mean, col: '#71717a' },
-                            { name: 'This system', val: baselines.offline_stats.this_system.cost.mean, col: '#18181b', overhead: true },
+                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.cost.mean, col: '#d2d2d7' },
+                            { name: 'Random', val: baselines.offline_stats.random.cost.mean, col: '#86868b' },
+                            { name: 'This system', val: baselines.offline_stats.this_system.cost.mean, col: '#1d1d1f', overhead: true },
                           ],
                         },
                         {
-                          label: 'Total Carbon (kg)',
+                          label: 'Total Carbon',
                           fmt: (v: number) => `${v.toFixed(5)} kg`,
                           data: [
-                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.carbon.mean, col: '#a1a1aa' },
-                            { name: 'Random', val: baselines.offline_stats.random.carbon.mean, col: '#71717a' },
-                            { name: 'This system', val: baselines.offline_stats.this_system.carbon.mean, col: '#059669', overhead: true },
+                            { name: 'Always-strongest', val: baselines.offline_stats.always_strongest.carbon.mean, col: '#d2d2d7' },
+                            { name: 'Random', val: baselines.offline_stats.random.carbon.mean, col: '#86868b' },
+                            { name: 'This system', val: baselines.offline_stats.this_system.carbon.mean, col: '#1d1d1f', overhead: true },
                           ],
                         },
                         {
                           label: 'Quality Retained',
                           fmt: (v: number) => `${(v * 100).toFixed(1)}%`,
                           data: [
-                            { name: 'Always-strongest', val: 1.0, col: '#a1a1aa' },
-                            { name: 'Random', val: baselines.offline_stats.random.quality.mean, col: '#71717a' },
-                            { name: 'This system', val: baselines.offline_stats.this_system.quality.mean, col: '#2563eb', overhead: false },
+                            { name: 'Always-strongest', val: 1.0, col: '#d2d2d7' },
+                            { name: 'Random', val: baselines.offline_stats.random.quality.mean, col: '#86868b' },
+                            { name: 'This system', val: baselines.offline_stats.this_system.quality.mean, col: '#1d1d1f', overhead: false },
                           ],
                         },
                       ].map((col) => {
                         const maxVal = Math.max(...col.data.map(d => d.val)) || 1;
                         return (
-                          <div key={col.label} className="space-y-2">
-                            <span className="text-xs font-semibold text-[#71717a]">{col.label}</span>
+                          <div key={col.label} className="space-y-2.5">
+                            <span className="text-xs font-medium text-[#6e6e73]">{col.label}</span>
                             {col.data.map((d: any) => (
                               <div key={d.name} className="space-y-1">
                                 <div className="flex justify-between text-[11px] font-mono">
-                                  <span className="text-[#71717a]">{d.name}</span>
-                                  <span className="font-bold text-[#18181b]">{col.fmt(d.val)}</span>
+                                  <span className="text-[#6e6e73]">{d.name}</span>
+                                  <span className="font-semibold text-[#1d1d1f]">{col.fmt(d.val)}</span>
                                 </div>
-                                <div className="w-full h-1.5 bg-[#f4f4f5] rounded-full overflow-hidden flex">
+                                <div className="w-full h-1 bg-[#f5f5f7] rounded-full overflow-hidden flex">
                                   <div
                                     style={{
                                       width: `${((d.val * (d.overhead ? 0.92 : 1)) / maxVal) * 100}%`,
@@ -856,8 +865,8 @@ export default function EcoRouterProductionPage() {
                                   {d.overhead && (
                                     <div
                                       style={{ width: `${((d.val * 0.08) / maxVal) * 100}%` }}
-                                      className="h-full bg-amber-400"
-                                      title="Scheduler overhead (Jev routing + verification)"
+                                      className="h-full bg-[#86868b]"
+                                      title="Scheduler overhead included (Invariant 7)"
                                     />
                                   )}
                                 </div>
@@ -867,33 +876,28 @@ export default function EcoRouterProductionPage() {
                         );
                       })}
                     </div>
-
-                    <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-[#f4f4f5] text-[11px] text-[#71717a]">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#18181b]" /> Direct task work</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-amber-400" /> Scheduler overhead (Invariant 7)</span>
-                    </div>
                   </Card>
                 )}
 
                 {/* Grid Intensity & Forecast */}
                 {grid && (
-                  <Card className="p-5">
+                  <Card className="p-6">
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <div className="text-xs font-bold uppercase text-[#18181b] tracking-wider">
+                        <div className="text-xs font-semibold uppercase text-[#1d1d1f] tracking-wider">
                           Grid Carbon Intensity ({grid.zone})
                         </div>
-                        <div className="text-2xl font-bold font-mono text-[#18181b] mt-1">
-                          {grid.current_intensity_gco2_per_kwh} <span className="text-xs font-sans text-[#71717a]">gCO₂/kWh</span>
+                        <div className="text-2xl font-semibold font-mono text-[#1d1d1f] mt-1">
+                          {grid.current_intensity_gco2_per_kwh} <span className="text-xs font-sans text-[#86868b]">gCO₂/kWh</span>
                         </div>
                       </div>
-                      <Badge variant="outline" size="sm" style={{ borderStyle: 'dashed' }}>
-                        Simulated forecast — not live data
+                      <Badge variant="outline" size="sm">
+                        Simulated forecast
                       </Badge>
                     </div>
 
-                    <div className="border border-dashed border-[#d4d4d8] rounded-xl p-4 bg-[#fafafa]">
-                      <div className="flex items-end gap-2 h-20">
+                    <div className="border border-dashed border-[#d2d2d7] rounded-xl p-4 bg-[#fbfbfd]">
+                      <div className="flex items-end gap-2 h-16">
                         {grid.simulated_forecast.map((f, i) => {
                           const maxI = Math.max(...grid.simulated_forecast.map(x => x.intensityGco2));
                           const minI = Math.min(...grid.simulated_forecast.map(x => x.intensityGco2));
@@ -905,17 +909,17 @@ export default function EcoRouterProductionPage() {
                                 title={`${f.intensityGco2} gCO₂/kWh`}
                                 style={{ height: `${pct}%` }}
                                 className={`w-full rounded-t border-t border-dashed ${
-                                  isValley ? 'bg-emerald-600/30 border-emerald-600' : 'bg-[#e4e4e7] border-[#a1a1aa]'
+                                  isValley ? 'bg-[#1d1d1f] border-[#1d1d1f]' : 'bg-[#e5e5e7] border-[#b0b0b5]'
                                 }`}
                               />
-                              <span className="text-[10px] font-mono text-[#71717a] mt-1">
+                              <span className="text-[10px] font-mono text-[#86868b] mt-1">
                                 {i === 0 ? 'Now' : `+${f.hourOffset}h`}
                               </span>
                             </div>
                           );
                         })}
                       </div>
-                      <p className="text-[11px] text-[#a1a1aa] mt-3 italic">{grid.disclosure}</p>
+                      <p className="text-[11px] text-[#86868b] mt-3 italic">{grid.disclosure}</p>
                     </div>
                   </Card>
                 )}
@@ -924,9 +928,9 @@ export default function EcoRouterProductionPage() {
           </div>
 
           {/* Methodology Footer */}
-          <footer className="mt-12 pt-6 border-t border-[#eaeaea] text-[11px] text-[#71717a] leading-relaxed">
+          <footer className="mt-12 pt-6 border-t border-[#e5e5e7] text-[11px] text-[#86868b] leading-relaxed">
             <p className="mb-1">
-              <strong>Methodology & Compliance:</strong> Headline savings numbers come from measured offline evaluations (N=60 subtasks, 3 contracts × 3 repeats).
+              <strong>Methodology:</strong> Headline savings numbers come from measured offline evaluations (N=60 subtasks).
               All figures include scheduler overhead (Jev routing, embeddings, cascade verification) per Invariant 7.
               Cloud carbon uses EcoLogits output as-is; grid intensity is never applied to cloud (Invariant 1).
               Local carbon is calculated as CodeCarbon measured energy × live {grid?.zone ?? 'IN-SO'} grid intensity.
@@ -938,18 +942,15 @@ export default function EcoRouterProductionPage() {
 
       {/* ── Time-shift Batch Modal ───────────────────────────────────────────── */}
       {showTimeShift && timeShiftData && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#eaeaea] rounded-2xl max-w-md w-full p-6 shadow-xl">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f4f4f5]">
-              <div className="flex items-center gap-2">
-                <Leaf className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-bold tracking-tight text-[#18181b]">
-                  Time-Shift Batch Dispatcher
-                </h3>
-              </div>
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-[#e5e5e7] rounded-3xl max-w-md w-full p-6 shadow-xl">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#f5f5f7]">
+              <h3 className="text-sm font-semibold tracking-tight text-[#1d1d1f]">
+                Time-Shift Batch Dispatcher
+              </h3>
               <button
                 onClick={() => setShowTimeShift(false)}
-                className="text-[#71717a] hover:text-[#18181b] transition-colors"
+                className="text-[#86868b] hover:text-[#1d1d1f] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -957,33 +958,33 @@ export default function EcoRouterProductionPage() {
 
             <div className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-[#fafafa] p-2.5 rounded-lg border border-[#eaeaea]">
-                  <span className="text-[#71717a] block text-[10px] uppercase">Intensity Now</span>
-                  <span className="text-[#18181b] font-bold font-mono text-sm">{timeShiftData.intensity_now_gco2} gCO₂/kWh</span>
+                <div className="bg-[#f5f5f7] p-3 rounded-xl">
+                  <span className="text-[#86868b] block text-[10px] uppercase">Intensity Now</span>
+                  <span className="text-[#1d1d1f] font-semibold font-mono text-sm">{timeShiftData.intensity_now_gco2} gCO₂/kWh</span>
                 </div>
-                <div className="bg-[#fafafa] p-2.5 rounded-lg border border-[#eaeaea]">
-                  <span className="text-[#71717a] block text-[10px] uppercase">Forecast Valley (+3h)</span>
-                  <span className="text-emerald-700 font-bold font-mono text-sm">{timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh</span>
+                <div className="bg-[#f5f5f7] p-3 rounded-xl">
+                  <span className="text-[#86868b] block text-[10px] uppercase">Forecast Valley (+3h)</span>
+                  <span className="text-[#1d1d1f] font-semibold font-mono text-sm">{timeShiftData.min_forecast_intensity_gco2} gCO₂/kWh</span>
                 </div>
               </div>
 
-              <div className="bg-[#fafafa] p-2.5 rounded-lg border border-[#eaeaea] flex items-center justify-between">
-                <span className="text-[#71717a]">Threshold difference:</span>
-                <span className="font-bold text-[#18181b]">
+              <div className="bg-[#f5f5f7] p-3 rounded-xl flex items-center justify-between">
+                <span className="text-[#6e6e73]">Threshold difference:</span>
+                <span className="font-semibold text-[#1d1d1f]">
                   {timeShiftData.difference_pct}% &gt; {timeShiftData.threshold_pct}% threshold
                 </span>
               </div>
 
-              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-emerald-900">
-                <div className="flex items-center gap-1.5 font-bold mb-1">
-                  <Check className="w-3.5 h-3.5 text-emerald-700" />
+              <div className="bg-[#1d1d1f] text-white p-4 rounded-xl">
+                <div className="font-semibold mb-1 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" />
                   Action: {timeShiftData.action}
                 </div>
-                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                <p className="text-[11px] text-[#d2d2d7] leading-relaxed">
                   Scheduled for green window (+{timeShiftData.scheduled_for_offset_hours} hours).
                   Projected carbon saved: <strong>{timeShiftData.carbon_savings_projected_pct}%</strong>.
                 </p>
-                <p className="text-[10px] text-emerald-700 mt-1">
+                <p className="text-[10px] text-[#86868b] mt-1.5">
                   Rule: {timeShiftData.eligible_candidates}
                 </p>
               </div>

@@ -15,31 +15,31 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, { bg: string; text: string; border: string; hoverBg: string; hoverBorder: string }> = {
   primary: {
-    bg: '#18181b',
+    bg: '#1d1d1f',
     text: '#ffffff',
-    border: '#18181b',
-    hoverBg: '#27272a',
-    hoverBorder: '#27272a',
+    border: '#1d1d1f',
+    hoverBg: '#333336',
+    hoverBorder: '#333336',
   },
   secondary: {
-    bg: '#f4f4f5',
-    text: '#18181b',
-    border: '#e4e4e7',
-    hoverBg: '#e4e4e7',
-    hoverBorder: '#d4d4d8',
+    bg: '#f5f5f7',
+    text: '#1d1d1f',
+    border: 'transparent',
+    hoverBg: '#e8e8ed',
+    hoverBorder: 'transparent',
   },
   outline: {
     bg: '#ffffff',
-    text: '#3f3f46',
-    border: '#e4e4e7',
-    hoverBg: '#f4f4f5',
-    hoverBorder: '#d4d4d8',
+    text: '#1d1d1f',
+    border: '#d2d2d7',
+    hoverBg: '#f5f5f7',
+    hoverBorder: '#b0b0b5',
   },
   ghost: {
     bg: 'transparent',
-    text: '#52525b',
+    text: '#6e6e73',
     border: 'transparent',
-    hoverBg: '#f4f4f5',
+    hoverBg: '#f5f5f7',
     hoverBorder: 'transparent',
   },
 };
@@ -59,15 +59,15 @@ export const Button: React.FC<ButtonProps> = ({
   const [isHovered, setIsHovered] = React.useState(false);
 
   const paddingMap = {
-    sm: '4px 10px',
-    md: '8px 16px',
+    sm: '5px 12px',
+    md: '8px 18px',
     lg: '12px 24px',
   };
 
   const fontMap = {
     sm: '12px',
     md: '13px',
-    lg: '15px',
+    lg: '14px',
   };
 
   return (
@@ -75,16 +75,15 @@ export const Button: React.FC<ButtonProps> = ({
       disabled={disabled || loading}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`inline-flex items-center justify-center gap-2 font-medium select-none cursor-pointer transition-all duration-150 disabled:opacity-45 disabled:cursor-not-allowed ${className}`}
+      className={`inline-flex items-center justify-center gap-2 font-medium select-none cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
       style={{
         backgroundColor: isHovered && !disabled && !loading ? v.hoverBg : v.bg,
         color: v.text,
         border: `1px solid ${isHovered && !disabled && !loading ? v.hoverBorder : v.border}`,
-        borderRadius: '10px',
+        borderRadius: '9999px',
         padding: paddingMap[size],
         fontSize: fontMap[size],
-        lineHeight: '1.4',
-        boxShadow: variant === 'primary' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+        lineHeight: '1.3',
         ...style,
       }}
       {...props}

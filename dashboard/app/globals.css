@@ -1,37 +1,69 @@
 @import "tailwindcss";
 
-/* Notion-style: pure black & white, Inter/system font */
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* Apple Design System Typography & Colors */
+:root {
+  --apple-bg: #ffffff;
+  --apple-surface: #ffffff;
+  --apple-subtle: #f5f5f7;
+  --apple-subtle-hover: #e8e8ed;
+  --apple-border: #e5e5e7;
+  --apple-border-dark: #d2d2d7;
+  --apple-text-primary: #1d1d1f;
+  --apple-text-secondary: #6e6e73;
+  --apple-text-tertiary: #86868b;
+  --apple-black: #000000;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 body {
-  background: #ffffff;
-  color: #1a1a1a;
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  background-color: var(--apple-bg);
+  color: var(--apple-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  font-size: 14px;
-  line-height: 1.5;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
-input, textarea, button { font-family: inherit; }
+h1, h2, h3, h4 {
+  letter-spacing: -0.025em;
+  font-weight: 600;
+}
 
+input, textarea, button, select {
+  font-family: inherit;
+}
+
+/* Apple-style minimalist slider */
 input[type="range"] {
   -webkit-appearance: none;
-  height: 2px;
-  background: #e0e0e0;
-  border-radius: 1px;
+  height: 3px;
+  background: #e5e5e7;
+  border-radius: 2px;
   outline: none;
-  cursor: pointer;
-  width: 100%;
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #1a1a1a;
-  cursor: pointer;
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #1a1a1a;
 }
 
-::selection { background: #1a1a1a; color: #fff; }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1d1d1f;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+::selection {
+  background: #1d1d1f;
+  color: #ffffff;
+}

@@ -4,11 +4,13 @@ import React from 'react';
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   hoverable?: boolean;
+  subtle?: boolean;
   children: React.ReactNode;
 }
 
 export const Card: React.FC<CardProps> = ({
   hoverable = false,
+  subtle = false,
   children,
   className = '',
   style,
@@ -22,12 +24,12 @@ export const Card: React.FC<CardProps> = ({
       onMouseLeave={() => hoverable && setIsHovered(false)}
       className={`transition-all duration-200 ${className}`}
       style={{
-        backgroundColor: '#ffffff',
-        border: `1px solid ${hoverable && isHovered ? '#d4d4d8' : '#eaeaea'}`,
-        borderRadius: '14px',
+        backgroundColor: subtle ? '#f5f5f7' : '#ffffff',
+        border: `1px solid ${hoverable && isHovered ? '#d2d2d7' : '#e5e5e7'}`,
+        borderRadius: '18px',
         boxShadow: hoverable && isHovered
-          ? '0 6px 20px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02)'
-          : '0 1px 4px rgba(0, 0, 0, 0.02)',
+          ? '0 6px 18px rgba(0, 0, 0, 0.05)'
+          : subtle ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.02)',
         ...style,
       }}
       {...props}
