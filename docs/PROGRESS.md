@@ -138,7 +138,7 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - Scaled layout shell to `max-w-7xl` with responsive padding and centering across Header, Results, and Details.
   - Replaced smashed buttons with Apple-grade segmented control (`p-1 bg-[#f5f5f7] border border-[#e5e5e7] rounded-xl shadow-inner`) with active pill elevation.
   - Wrapped textarea in a code editor container with custom smooth scrollbars and monospace typography.
-  - Added semantic variants (`success`, `warning`, `info`, `local`, `cloud`) to [`dashboard/components/ui/Badge.tsx`](file:///E:/LLM_Router/dashboard/components/ui/Badge.tsx).
+  - Added semantic variants (`success`, `warning`, `info`, `local`, `cloud`) to `dashboard/components/ui/Badge.tsx`.
   - Redesigned Subtask cards with circular step badges, model pills, distinct solid offline-fallback badges, and structured micro-chips for latency, cost, carbon, and verification.
   - Fixed Route Inspector math format and styled the 5-factor stacked score bar with matching legend colors.
   - Upgraded disclosure drawer and methodology footer with proper bottom padding (`pb-12`).
@@ -148,3 +148,26 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - Live server responding at `http://localhost:3000`.
 
 **Currently broken / blockers:** None.
+
+## 2026-09-22 | Session 8 — OTP-Based Email Authentication (Complete)
+
+**Done this session:**
+- **Auth Module** (`orchestrator/src/api/auth.ts`): Implemented complete OTP authentication flow using `crypto.randomInt` for secure 6-digit OTP generation, in-memory `Map` session store (10-min OTP TTL, 30-min session TTL, auto-sweep every 5 min), Nodemailer SMTP email delivery with dev-console fallback (when `EMAIL_PASS` is absent, OTP is printed in the terminal with a `[OTP DEV MODE]` banner). Brute-force protection: max 5 incorrect attempts before OTP is invalidated. Constant-time comparison via `crypto.timingSafeEqual` prevents timing attacks.
+- **Two Auth Endpoints** (mounted at `/api/auth/*`, always public):
+  - `POST /api/auth/request-otp` — accepts `{ email }`, generates OTP, sends email or logs to console
+  - `POST /api/auth/verify-otp` — accepts `{ email, otp }`, validates OTP, returns `{ token, expiresAt }`
+- **Express Auth Middleware** (`authMiddleware`): Validates `Authorization: Bearer <token>` on all requests. Returns `401` for missing, invalid, or expired tokens. Applied to all `/api/*` routes except `/api/health` (infra ping stays public) and `/api/auth/*` (login flow stays public).
+- **Server Integration** (`orchestrator/src/api/server.ts`): Mounted `createAuthRouter()` before the auth guard, added a single middleware layer that protects all routes except `/api/health`.
+- **Dashboard Auth Helper** (`dashboard/lib/auth.ts`): `getToken()`, `setToken()`, `clearToken()`, `isAuthenticated()`, and `authFetch()` — a fetch wrapper that auto-injects `Authorization: Bearer <token>` and redirects to `/login` on `401`.
+- **Login Page** (`dashboard/app/login/page.tsx`): Two-step UI. Step 1: email entry → request OTP. Step 2: 6 individual digit input boxes with auto-advance on digit entry, paste support (paste full 6-digit code), auto-submit when all 6 digits filled, 60-second resend cooldown, dev-mode notice, back-to-email link. Step 3: success check animation → auto-redirect to `/`.
+- **Dashboard Guard & Logout** (`dashboard/app/page.tsx`): Auth guard `useEffect` redirects unauthenticated users to `/login`. All API calls (`/api/reconciliation`, `/api/grid`, `/api/baselines`, `/api/config`, `/api/tasks/latest`, `/api/score`, `/api/tasks`, `/api/time-shift`) now go through `authFetch`. `if (!authChecked) return null` prevents flash of unauthenticated content. "Sign out" button in header clears token and redirects to `/login`.
+- **Environment Variables**: Added `EMAIL_FROM`, `EMAIL_PASS`, `NEXT_PUBLIC_ORCHESTRATOR_URL` to `.env.example`.
+- **Auth Tests** (`orchestrator/src/api/__tests__/auth.test.ts`): 13 new tests covering OTP format/range, `authMiddleware` (missing header, invalid token, valid token happy path), `request-otp` (missing/invalid email, dev_mode flag), `verify-otp` (no pending OTP, wrong OTP, missing fields, brute-force lockout).
+
+**Verification:**
+- `orchestrator`: `tsc --noEmit` exit 0 (strict TypeScript — zero errors)
+- `orchestrator`: `npm test` — **36/36 tests passing** (23 existing + 13 new auth tests)
+- `nodemailer` + `supertest` + `@types/*` installed (pure-JS, no native compilation required)
+
+**Currently broken / blockers:** None.
+

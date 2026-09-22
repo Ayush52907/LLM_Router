@@ -12,8 +12,9 @@ import {
   Play, FastForward, Settings, Lock, Cloud, HardDrive,
   AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
   Zap, Flame, ShieldAlert, Sliders, ArrowRight, Clock,
-  DollarSign, Leaf, RefreshCw, X, FileText, Check
+  DollarSign, Leaf, RefreshCw, X, FileText, Check, LogOut
 } from 'lucide-react';
+import { authFetch, clearToken, isAuthenticated } from '../lib/auth';
 
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -162,10 +163,30 @@ export default function EcoRouterApplePage() {
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // ── Auth Guard ───────────────────────────────────────────────────────────────
+  // Redirect to /login immediately if no session token exists in sessionStorage.
+
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      window.location.href = '/login';
+    } else {
+      setAuthChecked(true);
+    }
+  }, []);
+
+  function handleLogout() {
+    clearToken();
+    window.location.href = '/login';
+  }
+
   // ── 1. Init Data ────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (!authChecked) return; // wait for auth guard to confirm token present
     async function init() {
+      // /api/health is public — plain fetch is fine here
       const h = await fetch(`${API_BASE}/api/health`).catch(() => null);
       if (h?.ok) {
         setApiOnline(true);
@@ -177,25 +198,25 @@ export default function EcoRouterApplePage() {
         setApiOnline(false);
       }
 
-      const rec = await fetch(`${API_BASE}/api/reconciliation`).catch(() => null);
+      const rec = await authFetch(`${API_BASE}/api/reconciliation`);
       if (rec?.ok) {
         const rd = await rec.json().catch(() => null);
         if (rd?.logs) setReconciliationLogs(rd.logs);
       }
 
-      const g = await fetch(`${API_BASE}/api/grid`).catch(() => null);
+      const g = await authFetch(`${API_BASE}/api/grid`);
       if (g?.ok) setGrid(await g.json());
 
-      const b = await fetch(`${API_BASE}/api/baselines`).catch(() => null);
+      const b = await authFetch(`${API_BASE}/api/baselines`);
       if (b?.ok) setBaselines(await b.json());
 
-      const c = await fetch(`${API_BASE}/api/config`).catch(() => null);
+      const c = await authFetch(`${API_BASE}/api/config`);
       if (c?.ok) {
         const d = await c.json();
         if (d.weights) setWeights(d.weights);
       }
 
-      const l = await fetch(`${API_BASE}/api/tasks/latest`).catch(() => null);
+      const l = await authFetch(`${API_BASE}/api/tasks/latest`);
       if (l?.ok) {
         const d = await l.json();
         if (d.task && d.subtasks?.length > 0) {
@@ -207,12 +228,12 @@ export default function EcoRouterApplePage() {
       }
     }
     init();
-  }, []);
+  }, [authChecked]);
 
   // ── 2. Route Inspector dynamic scoring ──────────────────────────────────────
 
   const fetchInspector = useCallback(async (st: Subtask, w: Weights) => {
-    const r = await fetch(`${API_BASE}/api/score`, {
+    const r = await authFetch(`${API_BASE}/api/score`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -241,7 +262,7 @@ export default function EcoRouterApplePage() {
     setIsRunning(true);
     setRunError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/tasks`, {
+      const res = await authFetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -253,9 +274,9 @@ export default function EcoRouterApplePage() {
         }),
       });
 
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error ?? `HTTP ${res.status}`);
+      if (!res || !res.ok) {
+        const e = res ? await res.json().catch(() => ({})) : {};
+        throw new Error(e.error ?? `HTTP ${res?.status ?? 'unknown'}`);
       }
 
       const data = await res.json();
@@ -279,7 +300,7 @@ export default function EcoRouterApplePage() {
   // ── 4. Time Shift Batch API ────────────────────────────────────────────────
 
   const handleTimeShift = useCallback(async () => {
-    const r = await fetch(`${API_BASE}/api/time-shift`, { method: 'POST' }).catch(() => null);
+    const r = await authFetch(`${API_BASE}/api/time-shift`, { method: 'POST' });
     if (r?.ok) {
       setTimeShiftData(await r.json());
       setShowTimeShift(true);
@@ -288,6 +309,9 @@ export default function EcoRouterApplePage() {
 
   const selectedSt = subtasks.find(s => s.id === selectedId) ?? null;
   const selectedEsc = selectedSt ? escalations.find(e => e.subtask_id === selectedSt.id) : null;
+
+  // Render nothing until auth check completes (avoids flash of unauthenticated content)
+  if (!authChecked) return null;
 
   return (
     <div className="min-h-screen bg-[#fafafc] text-[#1d1d1f] flex flex-col font-sans antialiased">
@@ -330,6 +354,14 @@ export default function EcoRouterApplePage() {
                 <RefreshCw className="w-2.5 h-2.5" /> {reconciliationLogs.length} Reconciled
               </button>
             )}
+            {/* Logout */}
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] border border-transparent hover:border-[#e5e5e7] transition-all"
+            >
+              <LogOut className="w-3 h-3" /> Sign out
+            </button>
           </div>
         </div>
       </header>
