@@ -8,6 +8,17 @@ interface CenterFlowProps {
   children?: React.ReactNode;
 }
 
+// Precalculated rounded spoke coordinates to prevent floating point SSR/client hydration differences
+const SPOKES = Array.from({ length: 12 }, (_, i) => {
+  const angle = (i * 30 * Math.PI) / 180;
+  return {
+    x1: Math.round((400 + Math.cos(angle) * 70) * 10) / 10,
+    y1: Math.round((400 + Math.sin(angle) * 70) * 10) / 10,
+    x2: Math.round((400 + Math.cos(angle) * 360) * 10) / 10,
+    y2: Math.round((400 + Math.sin(angle) * 360) * 10) / 10,
+  };
+});
+
 export const CenterFlow: React.FC<CenterFlowProps> = ({
   className = '',
   intensity = 'subtle',
@@ -98,25 +109,18 @@ export const CenterFlow: React.FC<CenterFlowProps> = ({
           <circle cx="400" cy="400" r="340" stroke="#f4f4f5" strokeWidth="1" strokeDasharray="4 8" />
 
           {/* Subtle radial spoke lines */}
-          {Array.from({ length: 12 }).map((_, i) => {
-            const angle = (i * 30 * Math.PI) / 180;
-            const x1 = 400 + Math.cos(angle) * 70;
-            const y1 = 400 + Math.sin(angle) * 70;
-            const x2 = 400 + Math.cos(angle) * 360;
-            const y2 = 400 + Math.sin(angle) * 360;
-            return (
-              <line
-                key={i}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
-                stroke="#e4e4e7"
-                strokeWidth="0.8"
-                strokeDasharray="4 12"
-              />
-            );
-          })}
+          {SPOKES.map((spoke, i) => (
+            <line
+              key={i}
+              x1={spoke.x1}
+              y1={spoke.y1}
+              x2={spoke.x2}
+              y2={spoke.y2}
+              stroke="#e4e4e7"
+              strokeWidth="0.8"
+              strokeDasharray="4 12"
+            />
+          ))}
         </svg>
       </div>
 
