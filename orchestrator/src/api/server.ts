@@ -1,6 +1,11 @@
 /**
  * Orchestrator API Server (Express).
  * Powers the Next.js mission-control dashboard.
+ *
+ * Auth:
+ *   /api/health          → public (infra ping)
+ *   /api/auth/*          → public (login flow)
+ *   all other /api/*     → protected (authMiddleware)
  */
 
 import express from 'express';
@@ -13,6 +18,7 @@ import { rankCandidates } from '../scoring/score.js';
 import { filterForPii } from '../constraints/engine.js';
 import { getConnectivityMonitor } from '../resilience/connectivity.js';
 import { runReconciliationPass } from '../resilience/reconciliation.js';
+import { createAuthRouter, authMiddleware } from './auth.js';
 
 export function createServer(): express.Express {
   const app = express();
@@ -22,6 +28,16 @@ export function createServer(): express.Express {
   const db = getDb();
   const config = loadConfig();
   const em = createElectricityMapsClient();
+
+  // ── Auth routes (always public — no token needed) ────────────────────────
+  app.use('/api/auth', createAuthRouter());
+
+  // ── Protected routes — require valid Bearer token ────────────────────────
+  // /api/health stays public; all other /api/* require auth.
+  app.use('/api', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path === '/health') return next();
+    authMiddleware(req, res, next);
+  });
 
   // 1. Health & Status (exposing real-time connectivity monitor state)
   app.get('/api/health', (_req, res) => {
