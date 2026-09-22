@@ -288,15 +288,17 @@ export function decomposeGeneralTask(
   const trimmed = rawInput.trim();
   const lower = trimmed.toLowerCase();
 
-  // Case 1: Simple greeting / direct conversational query
-  if (
+  // Case 1: Simple greeting / ping conversational query
+  const isGreeting =
     lower === 'hello' ||
     lower === 'hi' ||
     lower === 'hey' ||
     lower.startsWith('hello ') ||
     lower.startsWith('hi ') ||
-    trimmed.length < 25
-  ) {
+    lower.startsWith('hey ') ||
+    lower === 'ping';
+
+  if (isGreeting) {
     const stId = uuidv4();
     return [
       {

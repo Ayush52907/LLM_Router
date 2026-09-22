@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Award, ShieldCheck, Zap, DollarSign, Clock, Leaf } from 'lucide-react';
+import { Award, ShieldCheck, Zap, DollarSign, Clock, Leaf, Play } from 'lucide-react';
 
 interface CandidateBreakdown {
   model_id: string;
@@ -23,6 +23,8 @@ interface RouteInspectorProps {
   complexity: string;
   piiForced: boolean;
   candidates: CandidateBreakdown[];
+  onRunCandidate?: (modelId: string) => void;
+  isExecutingModel?: string | null;
 }
 
 export const RouteInspector: React.FC<RouteInspectorProps> = ({
@@ -30,6 +32,8 @@ export const RouteInspector: React.FC<RouteInspectorProps> = ({
   complexity,
   piiForced,
   candidates,
+  onRunCandidate,
+  isExecutingModel,
 }) => {
   return (
     <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-4 shadow-sm flex flex-col h-full">
@@ -104,8 +108,26 @@ export const RouteInspector: React.FC<RouteInspectorProps> = ({
                 <div style={{ width: `${c.carbon_norm * 15}%` }} className="bg-neutral-800 h-full" title="Carbon (15%)" />
               </div>
 
-              <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+              <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono mt-1 pt-1 border-t border-[#222]">
                 <span>Tier: {c.accuracy_tier.toFixed(2)}</span>
+                {onRunCandidate && (
+                  <button
+                    type="button"
+                    disabled={Boolean(isExecutingModel)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRunCandidate(c.model_id);
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-sans font-medium flex items-center gap-1 transition-all cursor-pointer ${
+                      c.is_winner
+                        ? 'bg-white text-black hover:bg-neutral-200'
+                        : 'bg-[#222] text-neutral-300 hover:bg-[#333] hover:text-white'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <Play className="w-2.5 h-2.5 fill-current" />
+                    {isExecutingModel === c.model_id ? 'Running…' : `Run API`}
+                  </button>
+                )}
                 <span className="text-neutral-500">
                   Raw: {c.raw_score.toFixed(3)}
                 </span>

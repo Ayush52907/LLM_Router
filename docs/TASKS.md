@@ -155,3 +155,14 @@ _Last updated: 2026-09-22_
 - [x] UI: added collapsible output viewer on subtask cards and "Workflow Deliverables & Executive Report" panel in Next.js dashboard
 - [x] E2E Verification: created and passed `scripts/test-e2e-pipeline.js` validating online Gemini routing and offline local execution with full outputs
 
+## Phase 11 — Selected Model Execution & Live Frontend Output Display ✅ (COMPLETE)
+
+- [x] Direct Model API endpoint: implemented `POST /api/run-model` in `orchestrator/src/api/server.ts` to execute prompt directly on selected models with full carbon/latency telemetry
+- [x] Invariant 2 Guard: enforce local model execution if PII data sensitivity is flagged
+- [x] Gemini REST mapping: updated `orchestrator/src/integrations/gemini-client.ts` model mapping to active Google AI Studio endpoints
+- [x] Subtask Card Output Accordion: added expandable "View Generated Output" on each node in `dashboard/components/DagCanvas.tsx`
+- [x] Candidate Direct Run: added "Run API" button to candidate cards in `dashboard/components/RouteInspector.tsx`
+- [x] Model Selector in Controls: added candidate model selector and "Run [Selected Model]" button in `dashboard/components/ControlsStrip.tsx`
+- [x] Deliverables & Model Response Panel: added tabbed Output Panel in `dashboard/app/page.tsx` showing model telemetry and generated output
+- [x] Test suite: added `orchestrator/src/api/__tests__/run-model.test.ts`, all 41/41 vitest tests passing, Next.js build clean
+

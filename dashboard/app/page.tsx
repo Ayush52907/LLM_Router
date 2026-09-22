@@ -8,7 +8,7 @@ import { RouteInspector } from '../components/RouteInspector';
 import { RightMiniPanels } from '../components/RightMiniPanels';
 import { ComparisonChart } from '../components/ComparisonChart';
 import { FooterDisclosure } from '../components/FooterDisclosure';
-import { X, CheckCircle2, Clock, Leaf, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, CheckCircle2, Clock, Leaf, FileText, ChevronDown, ChevronUp, Copy, Check, Sparkles, Cpu, Play } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:3001';
 
@@ -60,6 +60,31 @@ export default function MissionControlDashboard() {
   // Custom Prompt Input State
   const [showPromptEditor, setShowPromptEditor] = useState<boolean>(false);
   const [customPrompt, setCustomPrompt] = useState<string>(PRESET_CONTRACT_1);
+
+  // Model selection & Direct Model Run State
+  const [selectedModel, setSelectedModel] = useState<string>('auto');
+  const [isModelRunning, setIsModelRunning] = useState<boolean>(false);
+  const [modelRunResult, setModelRunResult] = useState<{
+    model_id: string;
+    location: string;
+    accuracy_tier: number;
+    prompt: string;
+    output: string;
+    source: string;
+    actual_latency_ms: number;
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+    carbon_kgco2eq: number;
+    energy_kwh: number;
+    timestamp: number;
+  } | null>(null);
+
+  // Workflow Task Deliverable Output State (synthesized across all subtasks)
+  const [taskOutput, setTaskOutput] = useState<string | null>(null);
+  const [outputTab, setOutputTab] = useState<'model' | 'workflow'>('model');
+  const [outputCopied, setOutputCopied] = useState<boolean>(false);
+
 
 
   // Controls state
@@ -204,11 +229,19 @@ export default function MissionControlDashboard() {
       status: st.status,
       escalated: st.escalation_count > 0,
       originalModel: st.escalation_count > 0 ? (escEvents.find((e: any) => e.subtask_id === st.id)?.from_model || 'mistral:7b') : null,
+      output: st.output || null,
+      prompt: st.prompt || null,
+      actualLatencyMs: st.actual_latency_ms || null,
+      actualCostUsd: st.actual_cost_usd || null,
     }));
 
     setNodes(mappedNodes);
     if (mappedNodes.length > 0) {
       setSelectedNodeId(mappedNodes[0].id);
+    }
+    if (task?.output) {
+      setTaskOutput(task.output);
+      setOutputTab('workflow');
     }
 
     setBudgets({
@@ -287,7 +320,9 @@ export default function MissionControlDashboard() {
       // 1. Submit pipeline task to backend
       const res = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           raw_input: customPrompt || "Master Services Agreement between Acme Cloud Technologies Inc. and Omni Retail Solutions LLC. Canary: CANARY-PII-ACME-90210.",
           urgency: isUrgent ? 'urgent' : 'normal',
@@ -333,6 +368,40 @@ export default function MissionControlDashboard() {
     }
   };
 
+  // 3b. Direct Model Execution API Call
+  const handleRunSelectedModel = async (overrideModelId?: string) => {
+    const modelToRun = overrideModelId || (selectedModel !== 'auto' ? selectedModel : inspectorCandidates[0]?.model_id || 'gemini-3.6-flash');
+    setIsModelRunning(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/run-model`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model_id: modelToRun,
+          prompt: customPrompt || PRESET_CONTRACT_1,
+          data_sensitivity: isPiiEnabled ? 'pii' : 'internal',
+          subtask_type: 'generation',
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.error || `Failed to run model: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      setModelRunResult(data);
+      setOutputTab('model');
+    } catch (err: any) {
+      alert(`Error running model ${modelToRun}: ${err.message}`);
+    } finally {
+      setIsModelRunning(false);
+    }
+  };
+
   // 4. Real Time-Shift Batch API Call
   const handleRunTimeShift = async () => {
     try {
@@ -375,6 +444,10 @@ export default function MissionControlDashboard() {
         onRunDemoTask={handleRunDemoTask}
         onRunTimeShift={handleRunTimeShift}
         isRunning={isRunning}
+        selectedModel={selectedModel}
+        onSelectModel={(m) => setSelectedModel(m)}
+        onRunSelectedModel={() => handleRunSelectedModel()}
+        isModelRunning={isModelRunning}
       />
 
       {/* Prompt / Contract Input Drawer Toggle */}
@@ -402,19 +475,28 @@ export default function MissionControlDashboard() {
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-neutral-500 uppercase font-mono">Presets:</span>
                 <button
-                  onClick={() => setCustomPrompt(PRESET_CONTRACT_1)}
+                  onClick={() => {
+                    setCustomPrompt(PRESET_CONTRACT_1);
+                    setIsPiiEnabled(true);
+                  }}
                   className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171717] hover:bg-[#262626] text-neutral-300 border border-[#262626] transition-colors"
                 >
                   Acme Cloud (Contract 1)
                 </button>
                 <button
-                  onClick={() => setCustomPrompt(PRESET_CONTRACT_2)}
+                  onClick={() => {
+                    setCustomPrompt(PRESET_CONTRACT_2);
+                    setIsPiiEnabled(true);
+                  }}
                   className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171717] hover:bg-[#262626] text-neutral-300 border border-[#262626] transition-colors"
                 >
                   CyberDyne (Contract 2)
                 </button>
                 <button
-                  onClick={() => setCustomPrompt('')}
+                  onClick={() => {
+                    setCustomPrompt('');
+                    setIsPiiEnabled(false);
+                  }}
                   className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171717] hover:bg-[#262626] text-neutral-400 border border-[#262626] transition-colors"
                 >
                   Clear / Custom Prompt
@@ -426,10 +508,17 @@ export default function MissionControlDashboard() {
               </span>
             </div>
 
+
             <textarea
               rows={5}
               value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCustomPrompt(val);
+                if (val.includes('CANARY-PII') || val.includes('SSN:') || val.includes('Contract ID:')) {
+                  setIsPiiEnabled(true);
+                }
+              }}
               placeholder="Paste any contract markdown, prompt, or task instructions here..."
               className="w-full bg-[#121212] border border-[#262626] rounded-md p-2.5 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors"
             />
@@ -465,6 +554,8 @@ export default function MissionControlDashboard() {
             complexity={selectedNode.complexity}
             piiForced={selectedNode.piiClass === 'raw_pii'}
             candidates={inspectorCandidates}
+            onRunCandidate={(modelId) => handleRunSelectedModel(modelId)}
+            isExecutingModel={isModelRunning ? selectedModel : null}
           />
         </div>
 
@@ -483,6 +574,115 @@ export default function MissionControlDashboard() {
           />
         </div>
       </div>
+
+      {/* 2.5 Generated Output & Deliverables Panel */}
+      {(modelRunResult || taskOutput) && (
+        <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-4 shadow-sm text-left">
+          <div className="flex items-center justify-between border-b border-[#262626] pb-3 mb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-white" />
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-200">
+                Generated Model Output &amp; Deliverables
+              </h2>
+            </div>
+
+            {/* View Switcher Tabs */}
+            <div className="flex items-center gap-1 bg-[#121212] p-0.5 rounded-lg border border-[#262626]">
+              {modelRunResult && (
+                <button
+                  type="button"
+                  onClick={() => setOutputTab('model')}
+                  className={`px-2.5 py-1 text-[11px] font-mono rounded-md transition-colors cursor-pointer ${
+                    outputTab === 'model'
+                      ? 'bg-white text-black font-semibold shadow-xs'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Direct Model: {modelRunResult.model_id}
+                </button>
+              )}
+              {taskOutput && (
+                <button
+                  type="button"
+                  onClick={() => setOutputTab('workflow')}
+                  className={`px-2.5 py-1 text-[11px] font-mono rounded-md transition-colors cursor-pointer ${
+                    outputTab === 'workflow'
+                      ? 'bg-white text-black font-semibold shadow-xs'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Workflow Report (Synthesized)
+                </button>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const textToCopy = outputTab === 'model' ? (modelRunResult?.output || '') : (taskOutput || '');
+                  navigator.clipboard.writeText(textToCopy);
+                  setOutputCopied(true);
+                  setTimeout(() => setOutputCopied(false), 2000);
+                }}
+                className="flex items-center gap-1 text-[11px] font-mono text-neutral-400 hover:text-white px-2.5 py-1 rounded bg-[#141414] border border-[#262626] hover:border-neutral-500 transition-colors cursor-pointer"
+              >
+                {outputCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy Output</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Tab 1: Single Model Direct Run Result */}
+          {outputTab === 'model' && modelRunResult && (
+            <div className="space-y-2.5">
+              {/* Telemetry Strip */}
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-neutral-400 bg-[#121212] p-2.5 rounded-lg border border-[#262626]">
+                <span className="flex items-center gap-1 text-white font-medium">
+                  <Cpu className="w-3 h-3 text-neutral-300" />
+                  {modelRunResult.model_id} ({modelRunResult.location})
+                </span>
+                <span className="text-neutral-600">·</span>
+                <span className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-[10px]">
+                  Source: {modelRunResult.source}
+                </span>
+                <span className="text-neutral-600">·</span>
+                <span>Latency: <strong className="text-neutral-200">{(modelRunResult.actual_latency_ms / 1000).toFixed(2)}s</strong></span>
+                <span className="text-neutral-600">·</span>
+                <span>Tokens: <strong className="text-neutral-200">{modelRunResult.input_tokens} in / {modelRunResult.output_tokens} out</strong></span>
+                <span className="text-neutral-600">·</span>
+                <span>Cost: <strong className="text-neutral-200">${modelRunResult.cost_usd.toFixed(5)}</strong></span>
+                <span className="text-neutral-600">·</span>
+                <span>Carbon: <strong className="text-neutral-200">{(modelRunResult.carbon_kgco2eq * 1000).toFixed(4)}g CO₂e</strong></span>
+              </div>
+
+              {/* Text Output Block */}
+              <div className="bg-[#0d0d0d] border border-[#262626] rounded-lg p-3.5 max-h-[380px] overflow-y-auto font-mono text-xs text-neutral-200 leading-relaxed whitespace-pre-wrap selection:bg-neutral-800">
+                {modelRunResult.output}
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Synthesized Full Workflow Output */}
+          {outputTab === 'workflow' && taskOutput && (
+            <div className="space-y-2.5">
+              <div className="bg-[#0d0d0d] border border-[#262626] rounded-lg p-3.5 max-h-[380px] overflow-y-auto font-mono text-xs text-neutral-200 leading-relaxed whitespace-pre-wrap selection:bg-neutral-800">
+                {taskOutput}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 3. Bottom Strip: Policy Comparison Chart */}
       <ComparisonChart

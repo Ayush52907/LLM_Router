@@ -19,6 +19,11 @@ import { filterForPii } from '../constraints/engine.js';
 import { getConnectivityMonitor } from '../resilience/connectivity.js';
 import { runReconciliationPass } from '../resilience/reconciliation.js';
 import { createAuthRouter, authMiddleware } from './auth.js';
+import { defaultOllamaClient } from '../integrations/ollama-client.js';
+import { defaultGeminiClient } from '../integrations/gemini-client.js';
+import { defaultCloudGatewayClient } from '../integrations/gateway-client.js';
+import { defaultSidecarClient } from '../integrations/sidecar-client.js';
+import { predictCarbonKgco2 } from '../scoring/score.js';
 
 export function createServer(): express.Express {
   const app = express();
@@ -55,6 +60,25 @@ export function createServer(): express.Express {
   // 2. Config & Registry
   app.get('/api/config', (_req, res) => {
     res.json(config);
+  });
+
+  // 2b. Gemini API Key Configuration
+  app.post('/api/config/api-key', (req, res) => {
+    const { api_key } = req.body;
+    if (typeof api_key === 'string' && api_key.trim().length > 0) {
+      process.env['GEMINI_API_KEY'] = api_key.trim();
+      res.json({ status: 'ok', configured: true });
+    } else {
+      res.status(400).json({ error: 'Valid api_key string is required' });
+    }
+  });
+
+  app.get('/api/config/api-key', (_req, res) => {
+    const key = process.env['GEMINI_API_KEY'] || process.env['GOOGLE_API_KEY'];
+    res.json({
+      configured: Boolean(key && key.trim().length > 0),
+      masked: key ? `${key.substring(0, 4)}...${key.substring(key.length - 4)}` : null,
+    });
   });
 
   // 3. Grid Intensity (Real solid gauge + Grey dashed simulated forecast)
@@ -115,13 +139,18 @@ export function createServer(): express.Express {
   // 5. Submit Task
   app.post('/api/tasks', async (req, res) => {
     try {
-      const { raw_input, urgency, data_sensitivity, fault_injected_type, custom_weights } = req.body;
+      const { raw_input, urgency, data_sensitivity, fault_injected_type, custom_weights, api_key } = req.body;
+      const userApiKey = api_key || (req.headers['x-gemini-api-key'] as string) || process.env['GEMINI_API_KEY'];
+      if (userApiKey) {
+        process.env['GEMINI_API_KEY'] = userApiKey;
+      }
       const result = await runTaskPipeline({
         rawInput: raw_input ?? 'Default contract text',
         urgency: urgency ?? 'normal',
         dataSensitivity: data_sensitivity ?? 'pii',
         faultInjectedSubtaskType: fault_injected_type ?? null,
         customWeights: custom_weights ?? undefined,
+        apiKey: userApiKey,
       });
       res.json(result);
     } catch (err: any) {
@@ -241,6 +270,122 @@ export function createServer(): express.Express {
         grid_intensity: live.gco2_per_kwh,
       });
     } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 8b. Direct Model Prompt Execution Endpoint
+  // Runs prompt directly against a selected model, making the API call and returning the output
+  app.post('/api/run-model', async (req, res) => {
+    try {
+      const {
+        model_id,
+        prompt,
+        data_sensitivity = 'internal',
+        subtask_type = 'generation',
+        api_key,
+      } = req.body;
+
+      if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({ error: 'Prompt string is required' });
+      }
+
+      const userApiKey = api_key || (req.headers['x-gemini-api-key'] as string) || process.env['GEMINI_API_KEY'];
+      if (userApiKey) {
+        process.env['GEMINI_API_KEY'] = userApiKey;
+      }
+
+      // Resolve candidate model from registry
+      const targetModel = config.models.find((m) => m.model_id === model_id) || config.models[0]!;
+
+      // Invariant 2: Cloud services never see raw PII
+      if (data_sensitivity === 'pii' && targetModel.location === 'cloud') {
+        return res.status(400).json({
+          error: 'Invariant 2 Violation: Cloud models cannot process raw PII. Please select a local model or disable PII Guard.',
+        });
+      }
+
+      const liveGrid = (await em.getLatestIntensity(config.localZone)).gco2_per_kwh;
+      let output = '';
+      let inputTokens = Math.round(prompt.length / 4);
+      let outputTokens = 150;
+      let latencyMs = 1200;
+      let source: string = 'fallback';
+
+      if (targetModel.location === 'local') {
+        const ollamaRes = await defaultOllamaClient.generate(targetModel.model_id, prompt, {
+          subtaskType: subtask_type,
+          description: `Direct prompt execution: ${prompt.substring(0, 60)}`,
+          dataSensitivity: data_sensitivity,
+          apiKey: userApiKey,
+        });
+        output = ollamaRes.response;
+        inputTokens = ollamaRes.inputTokens;
+        outputTokens = ollamaRes.outputTokens;
+        latencyMs = ollamaRes.totalDurationMs;
+        source = ollamaRes.source;
+      } else {
+        if (targetModel.model_id.startsWith('gemini')) {
+          const geminiRes = await defaultGeminiClient.generate(targetModel.model_id, prompt, {
+            subtaskType: subtask_type,
+            description: `Direct prompt execution: ${prompt.substring(0, 60)}`,
+            apiKey: userApiKey,
+          });
+          output = geminiRes.response;
+          inputTokens = geminiRes.inputTokens;
+          outputTokens = geminiRes.outputTokens;
+          latencyMs = geminiRes.totalDurationMs;
+          source = geminiRes.source;
+        } else {
+          const cloudRes = await defaultCloudGatewayClient.generate(targetModel.model_id, prompt);
+          output = cloudRes.response;
+          inputTokens = cloudRes.inputTokens;
+          outputTokens = cloudRes.outputTokens;
+          latencyMs = cloudRes.totalDurationMs;
+          source = cloudRes.source;
+        }
+      }
+
+      const totalTokens = inputTokens + outputTokens;
+      const costUsd = targetModel.predicted_cost_usd_per_1k_tokens * (totalTokens / 1000);
+      let carbonKgco2eq = 0;
+      let energyKwh = 0;
+
+      if (targetModel.location === 'local') {
+        energyKwh = targetModel.predicted_energy_kwh_per_1k_tokens * (totalTokens / 1000);
+        const sidecarLocal = await defaultSidecarClient.calculateLocalCarbon(config.localZone, energyKwh, latencyMs / 1000);
+        if (sidecarLocal && typeof sidecarLocal.carbon_kgco2eq === 'number') {
+          carbonKgco2eq = sidecarLocal.carbon_kgco2eq;
+        } else {
+          carbonKgco2eq = predictCarbonKgco2(targetModel, totalTokens, liveGrid);
+        }
+      } else {
+        // Invariant 1: Cloud carbon = EcoLogits output as-is, never zone grid intensity!
+        const sidecarCloud = await defaultSidecarClient.estimateCloudCarbon('openai', targetModel.model_id, inputTokens, outputTokens);
+        if (sidecarCloud && typeof sidecarCloud.gwp_mean_kgco2eq === 'number') {
+          carbonKgco2eq = sidecarCloud.gwp_mean_kgco2eq;
+        } else {
+          carbonKgco2eq = predictCarbonKgco2(targetModel, totalTokens, liveGrid);
+        }
+      }
+
+      res.json({
+        model_id: targetModel.model_id,
+        location: targetModel.location,
+        accuracy_tier: targetModel.accuracy_tier,
+        prompt,
+        output,
+        source,
+        actual_latency_ms: latencyMs,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: parseFloat(costUsd.toFixed(6)),
+        carbon_kgco2eq: parseFloat(carbonKgco2eq.toFixed(6)),
+        energy_kwh: parseFloat(energyKwh.toFixed(6)),
+        timestamp: Date.now(),
+      });
+    } catch (err: any) {
+      console.error('[run-model error]', err);
       res.status(500).json({ error: err.message });
     }
   });

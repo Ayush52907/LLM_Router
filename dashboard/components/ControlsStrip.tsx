@@ -23,6 +23,10 @@ interface ControlsStripProps {
   onRunDemoTask: () => void;
   onRunTimeShift: () => void;
   isRunning: boolean;
+  selectedModel?: string;
+  onSelectModel?: (model: string) => void;
+  onRunSelectedModel?: () => void;
+  isModelRunning?: boolean;
 }
 
 export const ControlsStrip: React.FC<ControlsStripProps> = ({
@@ -37,6 +41,10 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
   onRunDemoTask,
   onRunTimeShift,
   isRunning,
+  selectedModel = 'auto',
+  onSelectModel,
+  onRunSelectedModel,
+  isModelRunning = false,
 }) => {
   return (
     <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-3 shadow-sm flex flex-wrap items-center justify-between gap-3 text-left">
@@ -177,14 +185,46 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
           Time-shift
         </button>
 
-        {/* Run Demo Task Button */}
+        {/* Model Selection Dropdown */}
+        {onSelectModel && (
+          <div className="flex items-center gap-1">
+            <select
+              value={selectedModel}
+              onChange={(e) => onSelectModel(e.target.value)}
+              className="bg-[#121212] border border-[#262626] text-neutral-200 text-xs rounded-md px-2 py-1 focus:border-white focus:outline-none font-mono cursor-pointer hover:border-neutral-500 transition-colors"
+              title="Select candidate model for direct API call or choose Auto for full router dispatch"
+            >
+              <option value="auto">Auto (Optimal Router)</option>
+              <option value="gemini-3.6-flash">gemini-3.6-flash (Cloud · 0.82)</option>
+              <option value="gemini-pro-latest">gemini-pro-latest (Cloud · 0.94)</option>
+              <option value="phi3:latest">phi3:latest (Local · 0.58)</option>
+              <option value="deepseek-coder:6.7b">deepseek-coder:6.7b (Local · 0.67)</option>
+            </select>
+          </div>
+        )}
+
+        {/* Run Selected Model Button (when specific model selected) */}
+        {onRunSelectedModel && selectedModel !== 'auto' && (
+          <button
+            onClick={onRunSelectedModel}
+            disabled={isModelRunning}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-neutral-200 text-black hover:bg-white active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            title={`Executes direct API call to ${selectedModel} and displays output`}
+          >
+            <Play className="w-3.5 h-3.5 fill-black" />
+            {isModelRunning ? 'Calling API…' : `Run ${selectedModel}`}
+          </button>
+        )}
+
+        {/* Run Pipeline Button */}
         <button
           onClick={onRunDemoTask}
           disabled={isRunning}
           className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-white text-black hover:bg-neutral-200 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          title="Executes the full carbon- and latency-aware routing pipeline across all subtasks"
         >
           <Play className="w-3.5 h-3.5 fill-black" />
-          {isRunning ? 'Executing…' : 'Run Pipeline'}
+          {isRunning ? 'Executing Pipeline…' : 'Run Pipeline'}
         </button>
       </div>
     </div>

@@ -46,6 +46,7 @@ export interface RunPipelineOptions {
   maxTotalCarbonKgco2?: number;
   faultInjectedSubtaskType?: string | null;
   customWeights?: Partial<ScoringWeights>;
+  apiKey?: string;
 }
 
 export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ task: Task; subtasks: Subtask[] }> {
@@ -297,6 +298,9 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
       const ollamaRes = await defaultOllamaClient.generate(chosen.model_id, st.prompt, {
         subtaskType: st.type,
         description: st.description,
+        dataSensitivity: st.data_sensitivity,
+        piiClass: st.pii_class,
+        apiKey: options.apiKey,
       });
       subtaskOutput = ollamaRes.response;
       inputTokens = ollamaRes.inputTokens;
@@ -309,6 +313,7 @@ export async function runTaskPipeline(options: RunPipelineOptions): Promise<{ ta
         const geminiRes = await defaultGeminiClient.generate(chosen.model_id, promptToUse, {
           subtaskType: st.type,
           description: st.description,
+          apiKey: options.apiKey,
         });
         subtaskOutput = geminiRes.response;
         inputTokens = geminiRes.inputTokens;

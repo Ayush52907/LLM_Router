@@ -30,58 +30,75 @@ export class GeminiClient {
   async generate(
     model: string,
     prompt: string,
-    context?: { subtaskType?: string; description?: string },
+    context?: { subtaskType?: string; description?: string; apiKey?: string },
     timeoutMs: number = 30000
   ): Promise<GeminiGenerateResult> {
     const startTime = Date.now();
 
-    const activeKey = this.apiKey || process.env['GEMINI_API_KEY'] || process.env['GOOGLE_API_KEY'] || '';
+    const activeKey =
+      context?.apiKey ||
+      this.apiKey ||
+      process.env['GEMINI_API_KEY'] ||
+      process.env['GOOGLE_API_KEY'] ||
+      '';
 
     // 1. Try Direct Google Gemini REST API if key is present
     if (activeKey) {
       try {
         let cleanModel = model.replace(/^google\//, '');
-        if (!cleanModel.startsWith('gemini-3.6-flash')) {
-          cleanModel = 'gemini-3.6-flash';
-        }
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${activeKey}`;
+        const candidateModels = [
+          cleanModel,
+          'gemini-flash-latest',
+          'gemini-3.6-flash',
+          'gemini-flash-lite-latest',
+          'gemini-pro-latest',
+        ];
+        const uniqueModels = [...new Set(candidateModels)];
 
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [{ text: prompt }],
+        for (const targetModel of uniqueModels) {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${activeKey}`;
+
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [{ text: prompt }],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 2048,
               },
-            ],
-            generationConfig: {
-              temperature: 0.2,
-              maxOutputTokens: 1000,
-            },
-          }),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+            }),
+            signal: AbortSignal.timeout(timeoutMs),
+          });
 
-        if (resp.ok) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const data = (await resp.json()) as any;
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            const inputTokens = data.usageMetadata?.promptTokenCount ?? Math.round(prompt.length / 4);
-            const outputTokens = data.usageMetadata?.candidatesTokenCount ?? Math.round(text.length / 4);
-            return {
-              response: text.trim(),
-              inputTokens,
-              outputTokens,
-              totalDurationMs: Date.now() - startTime,
-              model,
-              source: 'gemini_api',
-            };
+          if (resp.ok) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const data = (await resp.json()) as any;
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              const inputTokens = data.usageMetadata?.promptTokenCount ?? Math.round(prompt.length / 4);
+              const outputTokens = data.usageMetadata?.candidatesTokenCount ?? Math.round(text.length / 4);
+              return {
+                response: text.trim(),
+                inputTokens,
+                outputTokens,
+                totalDurationMs: Date.now() - startTime,
+                model: targetModel,
+                source: 'gemini_api',
+              };
+            }
+          } else {
+            const errText = await resp.text();
+            console.warn(`[GeminiClient] Direct API with ${targetModel} returned ${resp.status}: ${errText}`);
+            if (resp.status === 401 || resp.status === 403) {
+              // Authentication failure with key
+              break;
+            }
           }
-        } else {
-          const errText = await resp.text();
-          console.warn(`[GeminiClient] Direct API returned ${resp.status}: ${errText}`);
         }
       } catch (err: any) {
         console.warn(`[GeminiClient] Direct call failed: ${err.message}. Trying gateway/fallback.`);

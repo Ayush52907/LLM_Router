@@ -5,6 +5,15 @@
  */
 
 import { generateDomainSubtaskOutput } from '../pipeline/output-synthesizer.js';
+import { defaultGeminiClient } from './gemini-client.js';
+
+export interface OllamaGenerateContext {
+  subtaskType?: string;
+  description?: string;
+  dataSensitivity?: string;
+  piiClass?: string;
+  apiKey?: string;
+}
 
 export interface OllamaGenerateResult {
   response: string;
@@ -12,7 +21,7 @@ export interface OllamaGenerateResult {
   outputTokens: number;
   totalDurationMs: number;
   model: string;
-  source: 'ollama' | 'ollama_offline';
+  source: 'ollama' | 'ollama_offline' | 'gemini_api';
 }
 
 export class OllamaClient {
@@ -25,7 +34,7 @@ export class OllamaClient {
   async generate(
     model: string,
     prompt: string,
-    context?: { subtaskType?: string; description?: string },
+    context?: OllamaGenerateContext,
     timeoutMs: number = 60000
   ): Promise<OllamaGenerateResult> {
     try {
@@ -58,7 +67,49 @@ export class OllamaClient {
         source: 'ollama',
       };
     } catch {
-      // Graceful offline fallback with domain-specific structured output
+      // 1. Ollama is unreachable locally (e.g. Ollama daemon not running).
+      // Invariant 2 Check: Cloud services NEVER see raw PII.
+      const isPii =
+        context?.dataSensitivity === 'pii' ||
+        context?.piiClass === 'raw_pii' ||
+        prompt.includes('CANARY-PII');
+
+      const hasGeminiKey = Boolean(
+        context?.apiKey ||
+        process.env['GEMINI_API_KEY'] ||
+        process.env['GOOGLE_API_KEY']
+      );
+
+      if (!isPii && hasGeminiKey) {
+        try {
+          const bridgedPrompt = `[Instruction: You are ${model}. Provide a comprehensive, accurate, direct answer to the following user request]:\n\n${prompt}`;
+          const geminiRes = await defaultGeminiClient.generate(
+            'gemini-flash-latest',
+            bridgedPrompt,
+            {
+              subtaskType: context?.subtaskType,
+              description: context?.description,
+              apiKey: context?.apiKey,
+            },
+            25000
+          );
+
+          if (geminiRes && geminiRes.response && geminiRes.source === 'gemini_api') {
+            return {
+              response: geminiRes.response,
+              inputTokens: geminiRes.inputTokens,
+              outputTokens: geminiRes.outputTokens,
+              totalDurationMs: geminiRes.totalDurationMs,
+              model,
+              source: 'gemini_api',
+            };
+          }
+        } catch (bridgeErr: any) {
+          console.warn(`[OllamaClient] Cloud bridge for ${model} failed: ${bridgeErr.message}. Falling back to domain synthesizer.`);
+        }
+      }
+
+      // 2. Graceful offline fallback with domain-specific structured output (strictly local, safe for PII)
       const synthesized = generateDomainSubtaskOutput(
         model,
         context?.subtaskType ?? 'other',

@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Lock, Cloud, HardDrive, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lock, Cloud, HardDrive, AlertTriangle, CheckCircle, RefreshCw, FileText, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 
 export interface DagNode {
   id: string;
@@ -14,6 +14,10 @@ export interface DagNode {
   status: 'queued' | 'routing' | 'executing' | 'verifying' | 'done' | 'failed';
   escalated?: boolean;
   originalModel?: string | null;
+  output?: string | null;
+  prompt?: string | null;
+  actualLatencyMs?: number | null;
+  actualCostUsd?: number | null;
 }
 
 interface DagCanvasProps {
@@ -27,6 +31,9 @@ export const DagCanvas: React.FC<DagCanvasProps> = ({
   selectedNodeId,
   onSelectNode,
 }) => {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   return (
     <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-4 shadow-sm flex flex-col h-full">
       <div className="flex items-center justify-between border-b border-[#262626] pb-2.5 mb-3">
@@ -137,6 +144,64 @@ export const DagCanvas: React.FC<DagCanvasProps> = ({
                   </span>
                 )}
               </div>
+
+              {/* Collapsible Output Viewer */}
+              {node.output && (
+                <div className="mt-2.5 pt-2 border-t border-[#262626]">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedId(expandedId === node.id ? null : node.id);
+                    }}
+                    className="flex items-center justify-between w-full text-[11px] font-mono text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <FileText className="w-3 h-3 text-neutral-400" />
+                      <span>{expandedId === node.id ? 'Hide Output' : 'View Generated Output'}</span>
+                    </span>
+                    {expandedId === node.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {expandedId === node.id && (
+                    <div className="mt-2 p-2.5 rounded bg-[#0d0d0d] border border-[#262626] text-xs font-mono text-neutral-300">
+                      <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#222] text-[10px] text-neutral-500">
+                        <div className="flex items-center gap-2">
+                          <span>Model: <strong className="text-neutral-200">{node.routedModel}</strong></span>
+                          {node.actualLatencyMs && (
+                            <span>· {(node.actualLatencyMs / 1000).toFixed(2)}s</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(node.output || '');
+                            setCopiedId(node.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer text-[10px]"
+                        >
+                          {copiedId === node.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto pr-1 text-[11px] text-neutral-300">
+                        {node.output}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
