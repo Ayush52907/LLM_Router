@@ -48,19 +48,6 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 - Replaced hardcoded string outputs in Stage 4 of `orchestrator/src/pipeline/runner.ts` with real Ollama/Sidecar calls.
 - Successfully built both `orchestrator` (`tsc`) and `dashboard` (`next build`). All 17 vitest tests and T1–T7 acceptance scripts pass.
 
-- No application code written. All application directories are empty.
-
-**Exact next step (when go-ahead received):**
-1. Start Phase 1.1: Initialize monorepo (package.json, tsconfig.json, .env.example, .gitignore).
-3. Then 1.3: SQLite schema.
-4. Then 1.4: Scoring engine — the heart of the system.
-
-**Open blockers:**
-- Need to confirm Jev access (Vercel AI Gateway API key). Heuristic fallback is ready to build if blocked. See `OPEN_QUESTIONS.md`.
-- Electricity Maps free tier zone availability for `IN-KA` (Bengaluru) is unverified. See `OPEN_QUESTIONS.md`.
-- EcoLogits `impacts.gwp.value` may be a `RangeValue` not a scalar. Sidecar must handle both cases. Already noted in CONTEXT.md locked decisions.
-
-<<<<<<< HEAD
 ## 2026-09-22 | Session 4 — Dashboard Apple-Simple Redesign + Real Data Verification
 
 **Done this session:**
@@ -185,7 +172,32 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - `FooterDisclosure.tsx`: Unified with `#0a0a0a` / `#262626` footer styling.
 - **Verification**: `npx tsc --noEmit` passed with 0 errors. All background servers (sidecar, orchestrator, dashboard) running.
 
-## 2026-09-22 | Session 13 — Selected Model Execution & Live Frontend Output Display (Complete)
+## 2026-09-22 | Session 13 — OTP-Based Email Authentication & Login Page (Complete)
+
+**Done this session:**
+- **Backend Email Delivery & Authentication**:
+  - `orchestrator/src/api/auth.ts`: Updated `sendOtpEmail` to support custom SMTP options (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SERVICE`) alongside Gmail, with rich HTML and plaintext email templates.
+  - Added `GET /api/auth/me` to authenticate caller identity and `POST /api/auth/logout` to invalidate sessions.
+  - Added support for `AUTH_DISABLED=true` environment flag.
+  - `orchestrator/src/api/server.ts`: Mounted `authMiddleware` protecting `/api/*` while keeping `/api/health` and `/api/auth/*` public.
+  - Test suite: Added unit tests for `GET /api/auth/me` and `POST /api/auth/logout`. All 37/37 vitest tests passing cleanly.
+- **Client Session Management & API Wrapper**:
+  - `dashboard/lib/auth.ts`: Implemented `getToken()`, `getUserEmail()`, `setSession()`, `clearSession()`, `isAuthenticated()`, and `authFetch()` wrapper with auto-redirect on 401.
+- **Login UI (`dashboard/app/login/page.tsx`)**:
+  - Sleek monochrome dark-mode aesthetic (`#000000` base, `#0a0a0a` card, `#262626` borders, subtle radial lighting).
+  - Step 1: Work email input with autofocus and validation.
+  - Step 2: 6-digit OTP entry with individual digit boxes, auto-focus traversal, backspace nav, clipboard paste support, auto-submit, resend countdown timer.
+  - **Backend Orchestration Delivery**: Removed frontend dev auto-fill. The generated 6-digit OTP is strictly dispatched and logged prominently in the backend orchestration terminal (or emailed via SMTP).
+  - Step 3: Access granted confirmation and seamless redirect to mission control.
+- **Dashboard Integration (`dashboard/app/page.tsx`)**:
+  - Added auth guard redirecting unauthenticated users to `/login`.
+  - Added top navigation bar displaying `EcoRouter / Mission Control`, live connection badge, logged-in user email, and `Sign Out` button.
+  - Integrated `authFetch` across all API calls.
+- **Verification**:
+  - Live API validation passed for OTP request, verification, 401 prevention, and Bearer token access.
+  - Verified OTP is formatted in an ASCII banner in the backend orchestrator console.
+
+## 2026-09-22 | Session 14 — Selected Model Execution & Live Frontend Output Display (Complete)
 
 **Done this session:**
 - **Codebase Analysis**:
@@ -211,7 +223,7 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - Corrected query classification in `decomposer.ts` to prevent technical queries under 25 chars from being miscategorized as greetings.
   - Added in-UI Gemini API Key configuration field that persists to localStorage and forwards keys to live Google Generative Language API.
 
-## 2026-09-22 | Session 14 — Gemini Environment Integration & Direct API Execution (Complete)
+## 2026-09-22 | Session 15 — Gemini Environment Integration & Direct API Execution (Complete)
 
 **Done this session:**
 - **Verified Environment Key Configuration**:
@@ -222,7 +234,8 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 - **Resolved Gemini Model Discovery & Quota Handling**:
   - Queried `ModelService.ListModels` to identify available endpoints for the user's API key.
   - Updated `orchestrator/src/integrations/gemini-client.ts` to automatically cascade across available flash/pro models (`gemini-flash-latest`, `gemini-3.6-flash`, `gemini-pro-latest`, `gemini-flash-lite-latest`) without prematurely aborting on model-specific 429 quota limits.
-## 2026-09-22 | Session 15 — Real Model Output Generation & Offline Fallback Overhaul (Complete)
+
+## 2026-09-22 | Session 16 — Real Model Output Generation & Offline Fallback Overhaul (Complete)
 
 **Done this session:**
 - **Ollama Client Cloud Bridge**:

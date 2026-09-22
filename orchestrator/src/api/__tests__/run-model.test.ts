@@ -7,6 +7,7 @@ import request from 'supertest';
 import { createServer } from '../server.js';
 
 describe('POST /api/run-model', () => {
+  process.env['AUTH_DISABLED'] = 'true';
   const app = createServer();
 
   it('fails if prompt is missing', async () => {

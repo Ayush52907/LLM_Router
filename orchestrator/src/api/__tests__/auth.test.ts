@@ -134,13 +134,13 @@ describe('POST /api/auth/request-otp', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 200 and dev_mode=true when EMAIL_PASS is absent', async () => {
+  it('returns 200 when EMAIL_PASS is absent (console dispatch)', async () => {
     delete process.env['EMAIL_PASS'];
     const res = await request(app)
       .post('/api/auth/request-otp')
       .send({ email: 'valid@example.com' });
     expect(res.status).toBe(200);
-    expect(res.body.dev_mode).toBe(true);
+    expect(res.body.message).toMatch(/OTP sent/i);
   });
 });
 
@@ -196,3 +196,57 @@ describe('POST /api/auth/verify-otp', () => {
     expect([401, 429]).toContain(res.status);
   });
 });
+
+// ── GET /api/auth/me & POST /api/auth/logout ─────────────────────────────────
+
+describe('GET /api/auth/me & POST /api/auth/logout', () => {
+  let app: express.Express;
+  beforeEach(() => { app = buildApp(); });
+
+  it('validates active session and logs out cleanly', async () => {
+    const testEmail = `me-test-${Date.now()}@example.com`;
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+
+    const reqRes = await request(app)
+      .post('/api/auth/request-otp')
+      .send({ email: testEmail });
+    expect(reqRes.status).toBe(200);
+
+    spy.mockRestore();
+
+    const match = logs.join('\n').match(/\b(\d{6})\b/);
+    expect(match).not.toBeNull();
+    const otp = match![1];
+
+    const verifyRes = await request(app)
+      .post('/api/auth/verify-otp')
+      .send({ email: testEmail, otp });
+    expect(verifyRes.status).toBe(200);
+    const token = verifyRes.body.token;
+    expect(verifyRes.body.email).toBe(testEmail);
+
+    // /api/auth/me returns identity
+    const meRes = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.email).toBe(testEmail);
+    expect(meRes.body.authenticated).toBe(true);
+
+    // Logout
+    const logoutRes = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${token}`);
+    expect(logoutRes.status).toBe(200);
+
+    // After logout, token is invalidated
+    const meAfterRes = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+    expect(meAfterRes.status).toBe(401);
+  });
+});
+
