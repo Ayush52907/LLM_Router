@@ -3,12 +3,8 @@ import * as path from 'path';
 
 // Load root .env first, then local .env if present
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
-dotenv.config();
-
-import path from 'path';
-import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-dotenv.config(); // fallback to current dir
+dotenv.config();
 import { getDb, seedModels } from './db/schema.js';
 import { loadConfig } from './registry/config-loader.js';
 import { createServer } from './api/server.js';
