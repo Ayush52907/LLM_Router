@@ -1,0 +1,66 @@
+{
+  "contract_id": "MSA-2026-0891",
+  "canary_token": "CANARY-PII-ACME-90210",
+  "extraction": {
+    "provider_name": "Acme Cloud Technologies Inc.",
+    "customer_name": "Omni Retail Solutions LLC",
+    "effective_date": "2026-01-15",
+    "term_start": "2026-02-01",
+    "term_end": "2029-01-31",
+    "pii_entities": [
+      "Sarah J. Jenkins",
+      "sarah.jenkins@acmecloud.example.com",
+      "000-12-3456",
+      "+1-555-019-2834",
+      "742 Evergreen Terrace, Springfield, OR 97477",
+      "Marcus Vance",
+      "m.vance@omniretail.example.com",
+      "+1-555-014-9981",
+      "1000 Pine Street, Seattle, WA 98101",
+      "CANARY-PII-ACME-90210"
+    ]
+  },
+  "classification": {
+    "section_1": "parties_and_contacts",
+    "section_2": "scope_and_term",
+    "section_3": "service_levels_and_payment",
+    "section_4": "intellectual_property",
+    "section_5": "indemnity_and_liability",
+    "section_6": "termination_and_transition"
+  },
+  "risky_clauses": [
+    {
+      "section": "4.1",
+      "title": "Unilateral Customer Work Product Assignment",
+      "risk_category": "intellectual_property_loss",
+      "severity": "critical",
+      "summary": "Customer irrevocably assigns all right, title, and interest in any inventions or code modifications created that interact with Provider API, even if created independently."
+    },
+    {
+      "section": "5.1",
+      "title": "Unlimited Customer Indemnity",
+      "risk_category": "unlimited_liability",
+      "severity": "critical",
+      "summary": "Customer must indemnify Provider for any third-party claim relating to Services without cap, regardless of Provider's negligence or fault."
+    },
+    {
+      "section": "5.2",
+      "title": "Provider Liability Cap ($50.00)",
+      "risk_category": "asymmetric_liability",
+      "severity": "high",
+      "summary": "Provider's aggregate liability capped at only $50 USD even in cases of gross negligence."
+    }
+  ],
+  "obligations": [
+    "Provider must maintain 99.9% monthly uptime",
+    "Provider must encrypt data at rest (AES-256) and in transit (TLS 1.3)",
+    "Customer must pay invoices net 30 days",
+    "Customer retains ownership of underlying customer data"
+  ],
+  "reply_email_rubric": [
+    "Rejects unilateral IP assignment in Section 4.1",
+    "Rejects unlimited indemnity in Section 5.1 and demands mutual cap",
+    "Demands increase of Provider liability cap in Section 5.2 from $50 to at least 12 months fees",
+    "Professional commercial tone with clear counter-proposals"
+  ]
+}

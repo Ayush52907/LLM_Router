@@ -1,0 +1,10 @@
+{
+  "_comment": "Predicted output token defaults per subtask type. EMA-updated at runtime. See PRD Addendum D.",
+  "extraction": 150,
+  "classification": 50,
+  "summarization": 400,
+  "generation": 600,
+  "code": 800,
+  "other": 300,
+  "_ema_alpha": 0.25
+}

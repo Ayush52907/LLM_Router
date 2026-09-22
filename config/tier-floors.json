@@ -1,0 +1,8 @@
+{
+  "_comment": "Accuracy floor per complexity tier. effective_floor = max(tier_floor, workflow_min_accuracy). See PRD Addendum C.",
+  "trivial": 0.40,
+  "low": 0.50,
+  "medium": 0.65,
+  "high": 0.80,
+  "expert": 0.90
+}

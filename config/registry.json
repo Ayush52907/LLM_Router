@@ -1,0 +1,44 @@
+{
+  "models": [
+    {
+      "model_id": "llama3.2:3b",
+      "location": "local",
+      "accuracy_tier": 0.55,
+      "accuracy_tier_source": "manual size-class estimate (3B param class)",
+      "predicted_latency_ms": 4000,
+      "predicted_cost_usd_per_1k_tokens": 0.0,
+      "predicted_energy_kwh_per_1k_tokens": 0.0002,
+      "cloud_carbon_kgco2eq_per_1k_tokens": null
+    },
+    {
+      "model_id": "mistral:7b",
+      "location": "local",
+      "accuracy_tier": 0.65,
+      "accuracy_tier_source": "manual size-class estimate (7B param class)",
+      "predicted_latency_ms": 7000,
+      "predicted_cost_usd_per_1k_tokens": 0.0,
+      "predicted_energy_kwh_per_1k_tokens": 0.0004,
+      "cloud_carbon_kgco2eq_per_1k_tokens": null
+    },
+    {
+      "model_id": "gpt-4o-mini",
+      "location": "cloud",
+      "accuracy_tier": 0.72,
+      "accuracy_tier_source": "MMLU-based tier estimate (GPT-4o-mini class)",
+      "predicted_latency_ms": 1800,
+      "predicted_cost_usd_per_1k_tokens": 0.00015,
+      "predicted_energy_kwh_per_1k_tokens": 0.0,
+      "cloud_carbon_kgco2eq_per_1k_tokens": 0.00080
+    },
+    {
+      "model_id": "gpt-4o",
+      "location": "cloud",
+      "accuracy_tier": 0.95,
+      "accuracy_tier_source": "MMLU-based tier estimate (GPT-4o class)",
+      "predicted_latency_ms": 3500,
+      "predicted_cost_usd_per_1k_tokens": 0.0025,
+      "predicted_energy_kwh_per_1k_tokens": 0.0,
+      "cloud_carbon_kgco2eq_per_1k_tokens": 0.0028
+    }
+  ]
+}

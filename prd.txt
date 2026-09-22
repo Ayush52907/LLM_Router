@@ -1,0 +1,503 @@
+# Carbon- and Latency-Aware Agent Workflow Scheduler — Final Build Spec (v4, FINAL)
+
+## 0. What this document is
+Complete technical spec for implementation. Supersedes all prior versions. Contains: the pitch framing, the architecture, every formula with no ambiguity left in it, the data model, the UI/demo spec, and explicit scope cuts. Build directly from this.
+
+---
+
+## 1. Positioning (state this, don't just build it)
+
+**Hook:** most agent subtasks don't need a frontier model. Nobody can see what each step costs in dollars, seconds, or carbon. We built the dispatcher that picks model, location, and timing per step — and proves the saving instead of asserting it.
+
+**Framing rule:** the pitch is "same output quality for less cost, latency, and carbon — proven, not claimed." Carbon is one axis, not the whole pitch. The differentiator versus other teams is the honesty layer: a real baseline comparison with the scheduler's own overhead included, disclosed measurement limitations, and a willingness to show where it doesn't win.
+
+**Prior art, stated explicitly in the pitch, not hidden:** this builds on RouteLLM (strong/weak model routing), FrugalGPT (cascade: cheap first, escalate on failure), and the Green Software Foundation's Carbon Aware SDK (shift compute to greener windows). The contribution is combining routing with a carbon/energy term, adaptive calibration, and a similarity-based cache, plus the measurement discipline — not any single mechanism in isolation.
+
+---
+
+## 2. Demo Workload (fixed, pre-test 10+ times before presenting)
+
+**Task:** "Process this 30-page vendor contract PDF: extract parties and dates, classify each clause, summarize obligations, flag risky clauses, and draft a reply email."
+
+This task is chosen because it forces every mechanism to fire visibly:
+- Extraction/classification → trivial complexity → routes to small local model.
+- Risk flagging → high complexity → routes to strong cloud model.
+- Contract contains PII → `data_sensitivity: pii` → forces local regardless of score (visible constraint override).
+- Reply-email drafting → medium complexity, has genuine room to fail verification → sets up a real escalation, not a staged one.
+
+Do not demo on an untested task. Run this exact task repeatedly beforehand and know its behavior cold.
+
+---
+
+## 3. System Overview
+
+A middleware router between task submission and a pool of LLMs (cloud + local). Per task: decompose → route each subtask by a five-factor score (latency, accuracy, cost, energy, carbon) on fixed scales → execute → verify via cascade → escalate on failure → calibrate registry from observed outcomes. Every run also computes a baseline counterfactual so results are provable, not asserted.
+
+**Terminology, fixed once:**
+- "Accuracy" = benchmark-derived quality tier per model, sourced per registry entry. Never presented as measured per-task correctness.
+- Stage 5 is **adaptive calibration** (EMA), not ML weight learning.
+- Grid carbon = **current-value, single-zone, real** for local; forecast/time-shifting = **explicitly simulated demo mode**, visually distinct (grey dashed) wherever shown.
+- Cloud-vs-local carbon comparison uses different measurement boundaries (Section 6a) — disclosed permanently in the UI footer, not just in this doc.
+
+---
+
+## 4. Pipeline
+
+### Stage 1 — Ingest & Decompose
+- Decomposer (single LLM call) splits task into a DAG-validated subtask queue (cycle check on `depends_on`; reject on cycle).
+- **Skip rule:** if a quick `boolean` Jev check says the task doesn't need multiple steps, skip decomposition and route as one subtask.
+- Subtask schema:
+```json
+{
+  "id": "uuid", "parent_task_id": "uuid",
+  "description": "string", "prompt": "string", "output": "string|null",
+  "type": "extraction|generation|classification|summarization|code|other",
+  "depends_on": ["subtask_id"], "input_from": ["subtask_id"],
+  "urgency": "urgent|normal", "data_sensitivity": "public|internal|pii",
+  "complexity_tier": "trivial|low|medium|high|expert",
+  "status": "queued|routing|executing|verifying|done|failed"
+}
+```
+- Tool-offload layer (Section 8) runs here: PDF → Markdown before anything hits an LLM.
+
+### Stage 2 — Workflow Constraints
+```json
+{
+  "max_total_latency_ms": 60000,
+  "max_total_cost_usd": 0.50,
+  "min_accuracy_tier_per_subtask": 0.6,
+  "max_total_carbon_kgco2eq": 0.01
+}
+```
+- `min_accuracy_tier_per_subtask` is a **per-subtask floor**, not an average — one weak step can't hide behind a good mean.
+- **Budget reservation:** total budget split into a per-subtask allowance at decomposition time (`total / subtask_count`, weighted by `complexity_tier`). Each subtask checks its own allowance first, dips into shared remainder only if under-allowance. Concurrent branches acquire allowance via a transaction on the running-total row (prevents the race condition of two subtasks reading/spending the same remaining budget simultaneously).
+- **Relaxation order when no candidate satisfies all constraints:** latency first, then cost, then carbon. Accuracy floor is relaxed **last**, and only with an explicit logged/surfaced warning — never silently.
+- `data_sensitivity: pii` → candidate pool filtered to `location: local` only, before scoring, unconditionally.
+
+### Stage 3 — Route
+**3.1 Similarity cache:**
+- Cache key: `(cosine similarity >= 0.92) AND (input token count within +/-20%)` — the token-count check prevents a short and a long document with similar phrasing from colliding.
+- A cache hit **skips the Jev call** but still re-runs the constraint check (Stage 2) and re-fetches current local grid intensity (Section 5) before confirming — a hit is never blindly trusted.
+- Cold start shows 0% hit rate honestly; no fabricated warm-cache demo.
+
+**3.2 Jev call** (on cache miss), exact AI SDK syntax:
+```ts
+import { experimental_evaluate as evaluate } from 'ai';
+
+const result = await evaluate({
+  model: 'typesafe-ai/jev',
+  state: { subtask_description, task_type, candidate_models },
+  questions: {
+    model_choice: {
+      type: 'choice',
+      instructions: 'Which model/location pair best fits this subtask?',
+      options: { modelA_cloud: 'Strong cloud model', modelB_local: 'Small local model' }
+    },
+    complexity: {
+      type: 'score',
+      instructions: 'Rate the complexity of this subtask.',
+      levels: ['trivial', 'low', 'medium', 'high', 'expert']
+    }
+  }
+});
+```
+`complexity` sets `subtask.complexity_tier` directly — feeds the accuracy floor and the budget weighting. Not decorative.
+
+**3.3 Scoring function (final, bug-fixed):**
+```
+score(candidate) = w_lat    * fixed_norm(latency_ms,     0, 10000)
+                  + w_acc   * (1 - fixed_norm(accuracy_tier,       0, 1))
+                  + w_cost  * fixed_norm(cost_usd,        0, 0.10)
+                  + w_energy* fixed_norm(energy_kwh,      0, 0.01)
+                  + w_carbon* fixed_norm(carbon_kgco2eq,  0, 0.005)
+
+score(candidate) -= jev_confidence * 0.05   // if candidate matches Jev's choice
+```
+- Fixed absolute bounds (config constants, not pool min-max) — preserves real magnitude differences and keeps scores comparable across subtasks and runs.
+- Accuracy term is candidate-dependent (this was v2's bug: a constant that never varied — fixed here).
+- `cost` and `energy` are computed from `predicted_cost_per_1k_tokens * tokens / 1000` — per-token, not a flat scalar.
+- Jev's choice is a small bonus, never the deciding vote — the formula always makes the final call.
+- **Urgency:** sets `w_lat` higher for that call (e.g. `urgent -> w_lat = 0.5`, others rebalanced to still sum to 1). Not a cloud-only filter — a fast local model can still win under `urgent`.
+
+### 4a. Grid Carbon Intensity (local only — see Section 6a for the cloud rule)
+- Electricity Maps API, `/v3/carbon-intensity/latest` endpoint, free tier — **current value only**. Forecast endpoints require a paid/commercial account and are not used live.
+- Applied only to the local candidate's fixed configured zone (e.g. `IN-KA` for Bengaluru).
+- **Time-shifting demo mode:** a separate, clearly labeled synthetic forecast curve (hand-authored JSON, 6-hour window) illustrates what deferral would look like with real forecast data. Rendered grey-dashed in the UI with a "Simulated — not live data" badge. Never mixed visually or numerically with the real current-intensity gauge.
+
+### Stage 4 — Execute
+- Cloud: Vercel AI Gateway. Local: Ollama.
+- Local `predicted_latency` includes a fixed cold-start allowance (e.g. +2000ms if idle >N minutes) rather than assuming instant local execution.
+- Asymmetric pairing (optional per-subtask): plan-then-execute (large model plans, small executes) or execute-then-verify (small executes, large only checks — feeds Stage 5 directly).
+- Records actual `{latency_ms, cost_usd, energy_kwh, carbon_kgco2eq, input_tokens, output_tokens}`.
+
+### 5 / 6a. Carbon Computation — Final Rule (fixes the double-counting bug)
+**One rule, applied without exception, no mixing:**
+- **Local execution:** `carbon_kgco2eq = measured_energy_kwh (from CodeCarbon) * live_grid_intensity(configured_zone)` — computed by the sidecar, using the real current Electricity Maps value.
+- **Cloud execution:** `carbon_kgco2eq = EcoLogits' own `.impacts.gwp.value` output, used as-is.` No zone is looked up, no multiplication is performed, no grid-intensity call is made for cloud at all. EcoLogits already bakes provider/datacenter carbon modeling into that figure — recomputing it from a zone would double-count and also requires a zone mapping that doesn't exist (providers don't expose serving datacenter location).
+- The `models` registry and `subtasks` table both store carbon as a **single scalar field regardless of source** (`actual_carbon_kgco2eq`), but the **computation path differs by location** as above — this is the one rule, stated once, applied identically everywhere in code. Never compute `energy * zone_intensity` for a cloud candidate.
+
+### 6b. Carbon Methodology Disclosure (permanent UI footer, not just documentation)
+EcoLogits (modeled, provider-level estimate, cloud) and CodeCarbon-times-grid-intensity (locally measured energy, applied against real current grid data) are **not directly comparable** — different system boundaries, and CodeCarbon on non-server hardware often falls back to TDP estimation with noise from concurrent processes. A cloud-vs-local carbon comparison can be systematically biased toward making local look greener. This is disclosed permanently in the UI (Section 9), not buried in a doc a judge won't read.
+
+### Stage 5 — Verify & Correct (FrugalGPT-style cascade)
+1. Jev `type: 'boolean'` — "is this output acceptable?" → `{ probability }`. Threshold 0.7, stated as a tunable starting point, not a calibrated value.
+2. **Pass** → Stage 6 (calibrate).
+3. **Fail:**
+   - Partial completion → reroute to a different model, re-execute.
+   - Complete but low quality → escalate to a higher-tier model: "review and correct this output" (repair, not full regen).
+   - Escalation blocked if it would breach a workflow budget (Stage 2) — fails closed, not silently over-budget.
+   - **Top-tier model fails verification** → no further escalation; subtask `failed`, reason `top_tier_verification_failed`, surfaced directly.
+   - Capped at 2 retries total.
+4. Cascade only wins economically if `P(pass)*cost(cheap) + P(fail)*(cost(cheap)+cost(escalation)) < cost(strong alone)` — this is not assumed, it's exactly what Section 7's baseline comparison measures per run.
+
+### Stage 6 — Calibrate
+- EMA per model-location pair, **per-token normalized** (not flat scalar): `predicted_new = 0.25 * actual_per_token + 0.75 * predicted_old_per_token`.
+- Formula weights are not auto-tuned; urgency sets them per-subtask, otherwise exposed as UI sliders (Section 9).
+
+---
+
+## 5. Model Registry
+
+| field | type | notes |
+|---|---|---|
+| `model_id` | string | |
+| `location` | enum | `cloud` \| `local` |
+| `accuracy_tier` | float 0-1 | benchmark-estimate |
+| `accuracy_tier_source` | string | e.g. "MMLU-based tier", "manual size-class estimate" |
+| `predicted_latency_ms` | float | EMA-updated, includes local cold-start allowance |
+| `predicted_cost_usd_per_1k_tokens` | float | static, provider pricing |
+| `predicted_energy_kwh_per_1k_tokens` | float | EMA-updated |
+
+No stored carbon field — always computed at score/execution time via the Section 6a rule.
+
+---
+
+## 6. Baseline Comparison (mandatory, not optional)
+
+Per demo run, compute alongside the real run:
+- **Baseline A — Always-strongest:** every subtask on the single highest-accuracy-tier cloud model, no verification/escalation overhead.
+- **Baseline B — Random:** uniform-random model/location per subtask (standard routing-literature baseline).
+- **This system:** actual run, **including** every Jev call, embedding call, and verification/escalation call in the totals — overhead is never excluded.
+
+**Headline numbers:** `% cost saved`, `% carbon saved`, `accuracy retained` — all vs. Baseline A. If the system doesn't beat baseline on the demo's task set, that's reported plainly, not hidden.
+
+---
+
+## 7. Tech Stack
+
+| layer | choice |
+|---|---|
+| Orchestrator | Node.js + TypeScript |
+| Cloud models + routing | Vercel AI Gateway (`typesafe-ai/jev` via `experimental_evaluate`) |
+| Local models | Ollama |
+| Carbon (both paths) | Python FastAPI sidecar wrapping EcoLogits (cloud) + CodeCarbon (local) — locked decision, CodeCarbon must run where local inference happens regardless |
+| Grid intensity | Electricity Maps API, `/v3/carbon-intensity/latest`, free tier |
+| Embeddings | `text-embedding-3-small` or local via Ollama |
+| Similarity | in-memory cosine scan (fine under ~1000 entries) |
+| Persistence | SQLite (`better-sqlite3`) |
+| Dashboard | Next.js + Recharts, polling SQLite via API route |
+| PDF→MD | `markitdown` or `pdf-parse` |
+
+---
+
+## 8. Tool-Offload Layer
+PDF→MD conversion, structured-extraction shortcuts, cache reuse — runs before Stage 3. Minimal, supporting infrastructure only; first thing to cut under time pressure since it doesn't prove the core routing/carbon claim.
+
+---
+
+## 9. UI / Demo Spec
+
+**Design principles:** one screen, no tab-switching. Dark "mission control" theme.
+
+**Color language (fixed, used consistently everywhere):**
+- Green = local / low-carbon / saved
+- Blue = cloud
+- Amber = deferred or relaxed constraint
+- Red = failed or escalated
+- Grey dashed = simulated data — always visually distinct from real data, no exceptions
+
+Everything animates live (nodes lighting up, bars filling) — a static dashboard reads as a screenshot, a live one reads as a system.
+
+### Layout (16:9, single screen)
+
+**Top strip — Headline panel:** three large counters with "vs Baseline A" deltas: **Cost saved · Carbon saved · Quality retained**. Small text beneath: *"includes scheduler overhead."* This one line pre-empts the sharpest judge question before it's asked.
+
+**Left 40% — Live DAG canvas:**
+- Subtasks as nodes, dependency edges drawn between them.
+- Each node badge: model name, cloud/local icon, complexity chip.
+- Node states animate: `queued` (grey) → `routing` (pulsing) → `executing` (spinner) → `verifying` (ring) → `done` (solid). Escalation: node flashes red, second badge appears showing `small model → strong model`.
+- The PII node carries a lock icon + "🔒 forced local" tag — the visible constraint-override moment.
+
+**Center 30% — Route Inspector:** clicking a node opens a candidate table with score breakdown as a stacked horizontal bar (latency/accuracy/cost/energy/carbon segments), winning candidate highlighted. This is the "not a black box" proof and where Jev's bonus-not-decision role is visible (show the pre-Jev-bonus and post-bonus score side by side if time allows).
+
+**Right 30% — three stacked mini-panels:**
+1. Live budget bars (cost/carbon/latency vs. constraints), per-subtask allowance markers shown.
+2. Grid panel: real current Bengaluru intensity as a solid gauge; below it, the grey-dashed "Simulated forecast" curve with its badge, visually separated, never overlapping the real gauge.
+3. Escalation log: scrolling list with reason codes.
+
+**Bottom strip — Comparison chart:** three horizontal bars per metric (Always-strongest / Random / This system), with "This system" split into **work** and **overhead** segments in distinct shades — showing overhead as its own visible segment is a credibility move, not a weakness to hide.
+
+**Persistent footer (always visible, small, never collapsed):** *"Cloud vs local carbon uses different measurement boundaries. Cloud = provider-modeled estimate (EcoLogits). Local = measured energy × live grid intensity. Differences below ~X are not necessarily meaningful."*
+
+**Controls (interactive moments for the demo):** weight sliders (latency/accuracy/cost/energy/carbon), Urgent/Normal toggle, PII toggle.
+
+---
+
+## 10. Data Model (SQLite)
+
+```sql
+CREATE TABLE tasks (
+  id TEXT PRIMARY KEY, raw_input TEXT, urgency TEXT, data_sensitivity TEXT,
+  max_total_latency_ms INTEGER, max_total_cost_usd REAL,
+  min_accuracy_tier_per_subtask REAL, max_total_carbon_kgco2eq REAL,
+  running_cost_usd REAL DEFAULT 0, running_carbon_kgco2eq REAL DEFAULT 0,
+  running_latency_ms REAL DEFAULT 0, created_at INTEGER, status TEXT
+);
+
+CREATE TABLE subtasks (
+  id TEXT PRIMARY KEY, task_id TEXT REFERENCES tasks(id),
+  description TEXT, prompt TEXT, output TEXT, type TEXT,
+  depends_on TEXT, input_from TEXT, status TEXT, data_sensitivity TEXT,
+  complexity_tier TEXT, subtask_budget_allowance_usd REAL,
+  routed_model TEXT, routed_location TEXT, jev_confidence REAL,
+  predicted_latency_ms REAL, predicted_cost_usd REAL,
+  predicted_energy_kwh REAL, predicted_carbon_kgco2eq REAL,
+  actual_latency_ms REAL, actual_cost_usd REAL,
+  actual_energy_kwh REAL, actual_carbon_kgco2eq REAL,
+  actual_input_tokens INTEGER, actual_output_tokens INTEGER,
+  verification_pass INTEGER, verification_probability REAL,
+  escalation_count INTEGER DEFAULT 0, embedding BLOB,
+  created_at INTEGER, completed_at INTEGER
+);
+
+CREATE TABLE escalation_events (
+  id TEXT PRIMARY KEY, subtask_id TEXT REFERENCES subtasks(id),
+  reason_code TEXT, from_model TEXT, to_model TEXT, created_at INTEGER
+);
+
+CREATE TABLE models (
+  model_id TEXT PRIMARY KEY, location TEXT,
+  accuracy_tier REAL, accuracy_tier_source TEXT,
+  predicted_latency_ms REAL, predicted_cost_usd_per_1k_tokens REAL,
+  predicted_energy_kwh_per_1k_tokens REAL
+);
+
+CREATE TABLE baseline_runs (
+  id TEXT PRIMARY KEY, task_id TEXT REFERENCES tasks(id),
+  baseline_type TEXT, -- 'always_strongest' | 'random'
+  total_cost_usd REAL, total_carbon_kgco2eq REAL,
+  total_latency_ms REAL, avg_accuracy_tier REAL
+);
+
+CREATE TABLE grid_intensity_cache (
+  zone TEXT, fetched_at INTEGER, current_gco2_per_kwh REAL,
+  PRIMARY KEY (zone, fetched_at)
+);
+```
+
+---
+
+## 11. Explicitly Out of Scope
+Agent loops with branching/tool-call trees, prompt caching across model switches, cross-region cloud carbon attribution, live forecast-based deferral (real API, not the demo stub), ML-trained routing weights, multi-machine distributed queue persistence.
+
+---
+
+## 12. Locked Decisions
+
+1. Jev access confirmed via Vercel AI Gateway before build starts; heuristic rule-based router as fallback if blocked.
+2. Python/Node split locked to one FastAPI sidecar for both EcoLogits and CodeCarbon.
+3. Accuracy tier = benchmark estimate, documented source, never presented as measured.
+4. Escalation cap = 2, hard limit; top-tier failure does not retry further.
+5. Grid carbon = current-value only, local zone only, real; forecast = simulated, always grey-dashed and labeled.
+6. **Carbon computation: local = energy × live grid intensity; cloud = EcoLogits' own output as-is. No zone lookup or multiplication ever applied to cloud. This is the single rule, applied without exception.**
+7. Cloud-vs-local carbon comparison is methodologically inconsistent — disclosed permanently in the UI footer.
+8. Baseline comparison (Section 6) is mandatory — without it, the honest claim is "a routing prototype," not "a proven saving."These are paste-ready. Each block replaces or adds to the section named in its heading.
+
+---
+
+## A. New Section 4: Data Flow & Privacy (replaces the PII rule in Stage 2)
+
+**Principle:** cloud services never see raw PII. Only the local machine does.
+
+**Sensitivity is per subtask, not per task:**
+- `raw_pii`: needs unredacted text. Local execution only, and a local verifier.
+- `redacted_ok`: can run on the redacted copy, so cloud is allowed.
+
+**Pipeline for a `pii`-flagged task:**
+1. **Local redaction step** (Presidio or spaCy NER plus regex) produces a redacted copy with placeholders (`[PARTY_1]`, `[DATE_2]`) and a local-only mapping table.
+2. **The decomposer sees only the user instruction plus the document outline** (headings, section count, token count), never the body. Subtask descriptions are therefore PII-free by construction.
+3. **Jev routing calls receive only** `{description, type, token_count, sensitivity}`, never document text.
+4. **Verification:** `redacted_ok` subtasks use Jev. `raw_pii` subtasks use a local judge model via Ollama.
+5. **Embeddings for the cache** use a local model (`nomic-embed-text` via Ollama) for all pii tasks.
+6. **Rehydration** (placeholders back to real values) happens locally after any cloud step.
+
+**Disclosed limit (put it in the UI footer too):** redaction is best-effort NER, not a guarantee.
+
+**Demo workload, corrected:**
+
+| Subtask | Class | Routes to |
+|---|---|---|
+| Extract parties/dates | `raw_pii` | small local (forced) |
+| Classify clauses | `redacted_ok`, trivial | small local (wins on score) |
+| Flag risky clauses | `redacted_ok`, high | strong cloud (floor rules out small) |
+| Summarize obligations | `redacted_ok`, medium | scored |
+| Draft reply email | `redacted_ok` with placeholders | cloud, then local rehydration |
+
+The email step being placeholder-based is what lets it escalate to a stronger cloud model without leaking PII. Use a **synthetic contract with fake PII and planted risky clauses**. This gives you gold labels and no real-data liability.
+
+**Fault injection:** add an "Inject failure" toggle on one subtask, labeled in the UI as "injected fault." Escalation is then guaranteed for the demo, and it's honest. A natural failure is a bonus, not a dependency.
+
+---
+
+## B. Replace Section 5.3 scoring bounds
+
+**Rule:** bounds are computed once by `calibrate_bounds.ts`, not hand-set.
+
+```
+reference_subtask = 2000 input tokens + 500 output tokens
+bound_X = 1.25 * max over ALL registry candidates of X at reference_subtask
+fixed_norm(x, 0, bound) = clamp(x / bound, 0, 1)
+```
+
+Provisional starting values (order-of-magnitude estimates, overwritten by the script):
+- latency: 30000 ms (local on a laptop can exceed 10 s, and 10000 would clamp it)
+- cost: 0.02 USD
+- energy: 0.003 kWh
+- carbon: 0.001 kgCO2eq
+
+**Jev bonus:** `bonus = jev_confidence * 0.02`. It must be at most one third of the smallest active weight.
+
+**Default weights:** latency 0.25, accuracy 0.35, cost 0.15, energy 0.10, carbon 0.15.
+
+**Two tests must pass before any UI work (Section 15):**
+- **T1 (slider flip):** moving `w_carbon` from 0.15 to 0.5 flips at least one subtask in the demo task from cloud to local.
+- **T2 (Jev bounded):** with the bonus removed, no more than 1 routing decision in the demo task changes.
+
+If T1 fails, fix the registry or bounds, not the UI.
+
+---
+
+## C. Constraint fixes (Section 5.2)
+
+**Complexity tier is assigned by the decomposer.** Jev's score on a cache miss can only raise it: `tier = max(decomposer_tier, jev_tier)`. This fixes the ordering bug, and cache hits still have a tier.
+
+**Allowances are lazy, not up-front.** When a subtask enters routing:
+```
+allowance_i = remaining_budget * weight(tier_i) / sum(weight(tier_j) for unrouted j)
+weights: trivial=1, low=2, medium=3, high=5, expert=8
+```
+
+**Tier-to-floor table:**
+
+| tier | trivial | low | medium | high | expert |
+|---|---|---|---|---|---|
+| floor | 0.40 | 0.50 | 0.65 | 0.80 | 0.90 |
+
+`effective_floor = max(tier_floor, workflow_min_accuracy)`. The workflow value defaults to 0, and the old flat 0.6 constant is removed.
+
+**Registry sanity check (config validation):**
+- local small ≈ 0.55
+- cloud small ≈ 0.70
+- cloud mid ≈ 0.82
+- cloud strong ≈ 0.95
+
+Trivial and low tasks can route local, and expert ones can't.
+
+---
+
+## D. Carbon at score time (amends Section 6)
+
+The one rule is unchanged: **cloud never uses grid intensity.** Add these missing pieces:
+
+- **Registry, cloud rows only:** `cloud_carbon_kgco2eq_per_1k_tokens`. It is initialized at startup by calling the sidecar once with the reference token sizes, then EMA-updated from real EcoLogits outputs. It is null for local rows.
+- **Predicted tokens:**
+  - Input tokens are counted exactly with a tokenizer.
+  - Output tokens are a per-subtask-type default (extraction 150, classification 50, summarization 400, generation 600, code 800), EMA-updated per type.
+- **Score-time carbon:**
+  - Cloud: `cloud_carbon_per_1k * predicted_tokens / 1000`
+  - Local: `energy_per_1k * predicted_tokens / 1000 * live_intensity`
+- **Actuals** still come from the sidecar (EcoLogits for cloud, CodeCarbon × intensity for local).
+
+**Consequence to state explicitly:** because cloud carbon isn't grid-dependent, **time-shifting applies to local candidates only.**
+
+---
+
+## E. Replace Section 8: Evaluation & Baselines (fixes the circular headline)
+
+**Two clearly separated result sets:**
+
+**1. Measured (offline, before the demo).**
+- Eval set: 20 subtasks drawn from 3 synthetic contracts, with gold answers:
+  - Extraction: field-level F1.
+  - Classification: label accuracy.
+  - Risk flagging: recall/precision on planted risky clauses.
+  - Summary and email: rubric score from a judge model from a different family than any producer.
+- Run three policies **for real**: Always-strongest, Random, and this system. Overhead is counted in this system's totals.
+- Repeat 3 times and report mean ± range.
+- Headline: `% cost saved`, `% carbon saved`, `quality retained = system_score / baselineA_score`, all from measured actuals.
+
+**2. Live (during the demo).**
+- A single run. The baseline is estimated from the registry and **labeled "estimated"** in the UI.
+- Show the measured N=20×3 numbers next to it, labeled "measured offline."
+
+If the system loses on any task type, show that row.
+
+---
+
+## F. Time-shift demo (replaces the 4a demo stub)
+
+- **Separate batch scenario:** "Summarize 200 archived contracts," deadline +6h, `max_total_latency_ms = null`. It is not run under the 60 s cap.
+- **Rule:** for local candidates only, if `intensity_now − min(intensity in [now, deadline]) > 15%`, set `scheduled_for` to that minimum.
+- **Simulated clock:** the demo clock runs at 1 hour per second, labeled "accelerated demo clock."
+- **Curve data:** the forecast is a synthetic curve (grey dashed).
+- **Real add-on (cheap):** start a poller now that stores real hourly Bengaluru intensity readings. By demo day you can show an "observed last 24h" real curve next to the simulated forecast, which honestly shows why time-shifting matters.
+
+---
+
+## G. Schema additions
+
+```sql
+ALTER TABLE subtasks ADD COLUMN pii_class TEXT;            -- raw_pii | redacted_ok
+ALTER TABLE subtasks ADD COLUMN redacted_prompt TEXT;
+ALTER TABLE subtasks ADD COLUMN predicted_output_tokens INTEGER;
+ALTER TABLE models   ADD COLUMN cloud_carbon_kgco2eq_per_1k_tokens REAL; -- null for local
+ALTER TABLE baseline_runs ADD COLUMN measured INTEGER;     -- 1 = real run, 0 = estimated
+ALTER TABLE baseline_runs ADD COLUMN run_index INTEGER;
+ALTER TABLE baseline_runs ADD COLUMN quality_score REAL;
+```
+
+---
+
+## H. New Section 14: Build Order & Cut Line
+
+1. **Router core:** registry, scoring, calibrated bounds, sidecar, Ollama and Gateway execution. Pass T1 and T2.
+2. **Eval harness:** synthetic contracts, gold labels, real Baseline A and B runs. **Cut line: everything above is the minimum honest submission.**
+3. **Privacy pipeline:** redaction, local verifier and embeddings, canary test.
+4. **DAG canvas and comparison chart:** the two visuals that carry the story.
+5. **Verify and escalate loop**, with the fault-injection toggle.
+6. **Sliders, Route Inspector, budget bars.**
+7. **Time-shift batch scenario.**
+8. **Cache, tool-offload.** Drop these first.
+
+---
+
+## I. New Section 15: Acceptance Tests (run before every rehearsal)
+
+- **T1 Slider flip** and **T2 Jev bounded** (Section B).
+- **T3 Canary PII test:** plant unique fake PII strings in the contract, log all outbound HTTP requests, and assert **zero** canary strings leave the machine. This is your strongest live proof for the privacy claim, so show the log.
+- **T4 Floor check:** no subtask routes to a model below its tier floor without a logged relaxation warning.
+- **T5 Escalation:** the fault-injected subtask escalates, and a budget-blocked escalation fails closed.
+- **T6 Cold start:** cache hit rate shows 0% on a fresh database.
+- **T7 Baseline:** the measured results table exists, and the live view labels "estimated" vs "measured."
+
+---
+
+## J. Cleanup
+
+- Renumber the sections and fix all cross-references: 1 Positioning, 2 Workload, 3 Overview, 4 Privacy, 5 Pipeline (5.1 to 5.6), 6 Carbon, 7 Registry, 8 Evaluation, 9 Stack, 10 Tool-offload, 11 UI, 12 Data model, 13 Out of scope, 14 Build order, 15 Tests, 16 Locked decisions.
+- Add to the UI footer: "PII redaction is best-effort."
+- Add to Locked Decisions: "Time-shifting is local-only," and "the headline numbers come from the measured offline run."
+
+With these in, the two questions I expected ("where does the contract text go?" and "why doesn't the slider change anything?") each have a demonstrable answer instead of a hole.
+
+I can fold all of this into a single clean v5 document if you'd like.

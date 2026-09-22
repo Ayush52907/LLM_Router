@@ -1,0 +1,16 @@
+{
+  "_comment": "Default scoring weights. Must sum to 1.0. See PRD Addendum B.",
+  "latency": 0.25,
+  "accuracy": 0.35,
+  "cost": 0.15,
+  "energy": 0.10,
+  "carbon": 0.15,
+  "_urgency_override": {
+    "_comment": "When urgency=urgent, use these weights instead. Must sum to 1.0.",
+    "latency": 0.50,
+    "accuracy": 0.25,
+    "cost": 0.10,
+    "energy": 0.075,
+    "carbon": 0.075
+  }
+}

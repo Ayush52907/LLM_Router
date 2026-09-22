@@ -1,0 +1,59 @@
+{
+  "contract_id": "MLDA-2026-9901",
+  "canary_token": "CANARY-PII-GLOBEX-44910",
+  "extraction": {
+    "provider_name": "Globex Logistics Global Ltd.",
+    "customer_name": "Apex Consumer Goods Corp.",
+    "effective_date": "2026-04-10",
+    "term_start": "2026-04-10",
+    "term_end": "unspecified",
+    "pii_entities": [
+      "David K. Miller",
+      "dmiller@globex-logistics.example.com",
+      "000-44-9912",
+      "+1-555-017-7711",
+      "500 Harbour View Road, Dover, DE 19901",
+      "Jennifer Wu",
+      "jennifer.wu@apex-consumer.example.com",
+      "+1-555-019-8800",
+      "1200 Market Street, Philadelphia, PA 19107",
+      "CANARY-PII-GLOBEX-44910"
+    ]
+  },
+  "classification": {
+    "section_1": "parties_and_contacts",
+    "section_2": "services_and_routing",
+    "section_3": "termination_and_cure",
+    "section_4": "liquidated_damages_and_penalties",
+    "section_5": "insurance_and_loss",
+    "section_6": "governing_law"
+  },
+  "risky_clauses": [
+    {
+      "section": "3.1",
+      "title": "Immediate Termination Without Cause or Cure & Cargo Seizure",
+      "risk_category": "unilateral_seizure_and_termination",
+      "severity": "critical",
+      "summary": "Operator may terminate and seize transit goods upon 24-hour notice without cause or cure period, with zero liability for spoilage or delay."
+    },
+    {
+      "section": "4.1",
+      "title": "Uncapped Liquidated Damages for Fuel Adjustments",
+      "risk_category": "punitive_dispute_penalties",
+      "severity": "critical",
+      "summary": "$50,000 upfront penalty plus 300% liquidated damages merely to dispute any invoice surcharge."
+    }
+  ],
+  "obligations": [
+    "Globex provides multimodal freight forwarding and ambient warehousing",
+    "Schedules and demurrage allowances per Schedule B",
+    "Distributor must maintain primary cargo insurance covering all risks",
+    "Governed by Delaware state law"
+  ],
+  "reply_email_rubric": [
+    "Rejects 24-hour termination and cargo seizure rights in Section 3.1",
+    "Requires 30-day notice with 30-day cure period",
+    "Rejects $50,000 dispute penalty and 300% liquidated damages in Section 4.1",
+    "Proposes standard commercial dispute resolution and invoice dispute escrow"
+  ]
+}

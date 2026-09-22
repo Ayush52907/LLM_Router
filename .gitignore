@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Database
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Eval outputs (results are committed; intermediate data is not)
+eval/results/*.jsonl
+eval/results/raw/

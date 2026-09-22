@@ -1,0 +1,59 @@
+{
+  "contract_id": "VSA-2026-1142",
+  "canary_token": "CANARY-PII-CYBER-88124",
+  "extraction": {
+    "provider_name": "CyberDyne Autonomous Systems Corp.",
+    "customer_name": "Nexus Health Network Inc.",
+    "effective_date": "2026-03-01",
+    "term_start": "2026-03-01",
+    "term_end": "2031-02-28",
+    "pii_entities": [
+      "Dr. Elena Rostova",
+      "elena.rostova@cyberdyne-systems.example.com",
+      "000-88-7766",
+      "+1-555-018-4422",
+      "200 Mission Boulevard, Fremont, CA 94539",
+      "Dr. Robert Chen",
+      "r.chen@nexushealth.example.com",
+      "+1-555-012-3399",
+      "450 North Michigan Avenue, Chicago, IL 60611",
+      "CANARY-PII-CYBER-88124"
+    ]
+  },
+  "classification": {
+    "section_1": "parties_and_contacts",
+    "section_2": "services_and_performance",
+    "section_3": "term_and_renewal",
+    "section_4": "disclaimers_and_exclusions",
+    "section_5": "confidentiality",
+    "section_6": "dispute_resolution"
+  },
+  "risky_clauses": [
+    {
+      "section": "3.1",
+      "title": "Irrevocable 5-Year Lock-In with 5-Day Notice Window",
+      "risk_category": "excessive_renewal_lockin",
+      "severity": "critical",
+      "summary": "Automatic 5-year renewal unless notice given in an exact 5-day window (180 to 175 days before expiry), plus 35% fee surcharge upon auto-renewal."
+    },
+    {
+      "section": "4.1",
+      "title": "Waiver of All Warranties & Gross Negligence Claims",
+      "risk_category": "unreasonable_liability_waiver",
+      "severity": "critical",
+      "summary": "Client forfeits all legal action and damages even for bodily injury or patient record loss caused by Vendor's gross negligence or willful misconduct."
+    }
+  ],
+  "obligations": [
+    "Vendor provides 24x7 automated robotic dispatch and maintenance",
+    "Vendor provides emergency response within 2 hours",
+    "Both parties must safeguard confidential proprietary information",
+    "Client must submit disputes to binding arbitration in Fremont, CA"
+  ],
+  "reply_email_rubric": [
+    "Rejects 5-year auto-renewal and 5-day notice window trap in Section 3.1",
+    "Demands standard 30-day notice for 1-year renewals without 35% surcharge",
+    "Rejects total waiver of gross negligence and bodily injury claims in Section 4.1",
+    "Professional commercial tone with healthcare regulatory compliance requirements"
+  ]
+}
