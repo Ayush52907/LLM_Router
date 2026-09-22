@@ -184,3 +184,29 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - `ComparisonChart.tsx`: Restyled to `#0a0a0a`, bars in greyscale (`#525252` for always-strongest, `#383838` for random, white for this system, with distinct `#737373` scheduler overhead segment per Invariant 7).
   - `FooterDisclosure.tsx`: Unified with `#0a0a0a` / `#262626` footer styling.
 - **Verification**: `npx tsc --noEmit` passed with 0 errors. All background servers (sidecar, orchestrator, dashboard) running.
+
+## 2026-09-22 | Session 13 — OTP-Based Email Authentication & Login Page (Complete)
+
+**Done this session:**
+- **Backend Email Delivery & Authentication**:
+  - `orchestrator/src/api/auth.ts`: Updated `sendOtpEmail` to support custom SMTP options (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SERVICE`) alongside Gmail, with rich HTML and plaintext email templates.
+  - Added `GET /api/auth/me` to authenticate caller identity and `POST /api/auth/logout` to invalidate sessions.
+  - Added support for `AUTH_DISABLED=true` environment flag.
+  - `orchestrator/src/api/server.ts`: Mounted `authMiddleware` protecting `/api/*` while keeping `/api/health` and `/api/auth/*` public.
+  - Test suite: Added unit tests for `GET /api/auth/me` and `POST /api/auth/logout`. All 37/37 vitest tests passing cleanly.
+- **Client Session Management & API Wrapper**:
+  - `dashboard/lib/auth.ts`: Implemented `getToken()`, `getUserEmail()`, `setSession()`, `clearSession()`, `isAuthenticated()`, and `authFetch()` wrapper with auto-redirect on 401.
+- **Login UI (`dashboard/app/login/page.tsx`)**:
+  - Sleek monochrome dark-mode aesthetic (`#000000` base, `#0a0a0a` card, `#262626` borders, subtle radial lighting).
+  - Step 1: Work email input with autofocus and validation.
+  - Step 2: 6-digit OTP entry with individual digit boxes, auto-focus traversal, backspace nav, clipboard paste support, auto-submit, resend countdown timer.
+  - **Backend Orchestration Delivery**: Removed frontend dev auto-fill. The generated 6-digit OTP is strictly dispatched and logged prominently in the backend orchestration terminal (or emailed via SMTP).
+  - Step 3: Access granted confirmation and seamless redirect to mission control.
+- **Dashboard Integration (`dashboard/app/page.tsx`)**:
+  - Added auth guard redirecting unauthenticated users to `/login`.
+  - Added top navigation bar displaying `EcoRouter / Mission Control`, live connection badge, logged-in user email, and `Sign Out` button.
+  - Integrated `authFetch` across all API calls.
+- **Verification**:
+  - Live API validation passed for OTP request, verification, 401 prevention, and Bearer token access.
+  - Verified OTP is formatted in an ASCII banner in the backend orchestrator console.
+

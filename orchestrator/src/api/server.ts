@@ -38,6 +38,12 @@ export function createServer(): express.Express {
   // ── Auth routes (always public — no token needed) ────────────────────────
   app.use('/api/auth', createAuthRouter());
 
+  // ── Protected routes — require valid Bearer token ────────────────────────
+  // /api/health and /api/auth/* stay public; all other /api/* require auth.
+  app.use('/api', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path === '/health' || req.path.startsWith('/auth')) return next();
+    authMiddleware(req, res, next);
+  });
 
   // 1. Health & Status (exposing real-time connectivity monitor state)
   app.get('/api/health', (_req, res) => {

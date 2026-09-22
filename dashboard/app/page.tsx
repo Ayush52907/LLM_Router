@@ -8,7 +8,8 @@ import { RouteInspector } from '../components/RouteInspector';
 import { RightMiniPanels } from '../components/RightMiniPanels';
 import { ComparisonChart } from '../components/ComparisonChart';
 import { FooterDisclosure } from '../components/FooterDisclosure';
-import { X, CheckCircle2, Clock, Leaf, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, CheckCircle2, Clock, Leaf, FileText, ChevronDown, ChevronUp, LogOut, User } from 'lucide-react';
+import { isAuthenticated, getUserEmail, logout, authFetch } from '../lib/auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:3001';
 
@@ -112,18 +113,33 @@ export default function MissionControlDashboard() {
   // Time-shift modal state
   const [timeShiftModal, setTimeShiftModal] = useState<any | null>(null);
 
+  // Auth state & guard
+  const [authChecked, setAuthChecked] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      window.location.href = '/login';
+    } else {
+      setCurrentUserEmail(getUserEmail());
+      setAuthChecked(true);
+    }
+  }, []);
+
   // 1. Initial Load: Fetch baselines, grid, config, and latest task
   useEffect(() => {
+    if (!authChecked) return;
+
     async function initData() {
       try {
-        // Fetch health
+        // Fetch health (public)
         const healthRes = await fetch(`${API_BASE}/api/health`).catch(() => null);
         if (healthRes && healthRes.ok) {
           setApiOnline(true);
         }
 
         // Fetch baselines
-        const baselinesRes = await fetch(`${API_BASE}/api/baselines`).catch(() => null);
+        const baselinesRes = await authFetch(`${API_BASE}/api/baselines`).catch(() => null);
         if (baselinesRes && baselinesRes.ok) {
           const bData = await baselinesRes.json();
           if (bData.measured_summary) {
@@ -159,7 +175,7 @@ export default function MissionControlDashboard() {
         }
 
         // Fetch live grid
-        const gridRes = await fetch(`${API_BASE}/api/grid`).catch(() => null);
+        const gridRes = await authFetch(`${API_BASE}/api/grid`).catch(() => null);
         if (gridRes && gridRes.ok) {
           const gData = await gridRes.json();
           setGridIntensity(gData.current_intensity_gco2_per_kwh);
@@ -167,7 +183,7 @@ export default function MissionControlDashboard() {
         }
 
         // Fetch config weights
-        const configRes = await fetch(`${API_BASE}/api/config`).catch(() => null);
+        const configRes = await authFetch(`${API_BASE}/api/config`).catch(() => null);
         if (configRes && configRes.ok) {
           const cData = await configRes.json();
           if (cData.weights) {
@@ -176,7 +192,7 @@ export default function MissionControlDashboard() {
         }
 
         // Fetch latest task from DB
-        const latestTaskRes = await fetch(`${API_BASE}/api/tasks/latest`).catch(() => null);
+        const latestTaskRes = await authFetch(`${API_BASE}/api/tasks/latest`).catch(() => null);
         if (latestTaskRes && latestTaskRes.ok) {
           const lData = await latestTaskRes.json();
           if (lData.task && lData.subtasks && lData.subtasks.length > 0) {
@@ -189,7 +205,7 @@ export default function MissionControlDashboard() {
     }
 
     initData();
-  }, []);
+  }, [authChecked]);
 
   // Helper to map backend task + subtasks to UI state
   const mapTaskToState = (task: any, subtasks: any[], escEvents: any[]) => {
@@ -235,7 +251,7 @@ export default function MissionControlDashboard() {
   const fetchDynamicScore = useCallback(
     async (nodeType: string, complexity: string, piiActive: boolean, currentWeights: ScoringWeightsState) => {
       try {
-        const resp = await fetch(`${API_BASE}/api/score`, {
+        const resp = await authFetch(`${API_BASE}/api/score`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -248,7 +264,7 @@ export default function MissionControlDashboard() {
           }),
         });
 
-        if (resp.ok) {
+        if (resp && resp.ok) {
           const data = await resp.json();
           setInspectorCandidates(data.candidates || []);
         }
@@ -285,7 +301,7 @@ export default function MissionControlDashboard() {
 
     try {
       // 1. Submit pipeline task to backend
-      const res = await fetch(`${API_BASE}/api/tasks`, {
+      const res = await authFetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -297,8 +313,8 @@ export default function MissionControlDashboard() {
         }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Failed to submit task: ${res.statusText}`);
+      if (!res || !res.ok) {
+        throw new Error(`Failed to submit task: ${res ? res.statusText : 'Authentication error'}`);
       }
 
       const data = await res.json();
@@ -309,8 +325,8 @@ export default function MissionControlDashboard() {
       let attempts = 0;
 
       while (!completed && attempts < 10) {
-        const pollRes = await fetch(`${API_BASE}/api/tasks/${taskId}`);
-        if (pollRes.ok) {
+        const pollRes = await authFetch(`${API_BASE}/api/tasks/${taskId}`);
+        if (pollRes && pollRes.ok) {
           const pollData = await pollRes.json();
           if (pollData.task.status === 'done' || pollData.task.status === 'failed') {
             mapTaskToState(pollData.task, pollData.subtasks, pollData.escalations || []);
@@ -336,10 +352,10 @@ export default function MissionControlDashboard() {
   // 4. Real Time-Shift Batch API Call
   const handleRunTimeShift = async () => {
     try {
-      const resp = await fetch(`${API_BASE}/api/time-shift`, {
+      const resp = await authFetch(`${API_BASE}/api/time-shift`, {
         method: 'POST',
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp || !resp.ok) throw new Error(`HTTP ${resp ? resp.status : 401}`);
       const data = await resp.json();
       setTimeShiftModal(data);
     } catch (err: any) {
@@ -353,8 +369,56 @@ export default function MissionControlDashboard() {
     piiClass: null,
   };
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-black text-neutral-400 flex items-center justify-center font-mono text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+          <span>Validating EcoRouter credentials...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-black text-neutral-100 p-3 gap-3">
+      {/* 0. Top Navigation & User Session Bar */}
+      <header className="flex items-center justify-between px-4 py-2 rounded-xl bg-[#0a0a0a] border border-[#262626]">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm shadow-white/40 animate-pulse" />
+            <span className="font-bold text-xs tracking-wider uppercase text-white font-mono">EcoRouter</span>
+            <span className="text-neutral-600 text-xs font-mono">/</span>
+            <span className="text-xs text-neutral-400 font-medium">Mission Control</span>
+          </div>
+          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-medium border ${
+            apiOnline
+              ? 'bg-neutral-900 text-neutral-200 border-neutral-700'
+              : 'bg-red-950/40 text-red-400 border-red-800/40'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${apiOnline ? 'bg-emerald-400' : 'bg-red-500'}`} />
+            {apiOnline ? 'Online' : 'Offline'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#121212] border border-[#262626] text-xs">
+            <User className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="text-neutral-300 font-mono text-[11px] max-w-[200px] truncate">
+              {currentUserEmail || 'operator'}
+            </span>
+          </div>
+          <button
+            onClick={() => logout(API_BASE)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 text-xs font-medium transition-colors cursor-pointer"
+            title="Sign out of EcoRouter"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </header>
+
       {/* 1. Top Strip: Headline Panel & Interactive Controls */}
       <HeadlinePanel
         costSavedPct={headlineMetrics.costSavedPct}
