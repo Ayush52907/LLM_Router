@@ -31,15 +31,33 @@ export class ConnectivityMonitor {
   private _listeners: StatusListener[] = [];
   private _probeUrl: string;
   private _isChecking = false;
+  private _mockOnline: boolean | null = null;
 
   constructor(probeUrl?: string) {
     this._probeUrl =
       probeUrl ||
-      process.env['AI_GATEWAY_BASE_URL'] ||
-      'https://ai-gateway.vercel.sh';
+      process.env['CONNECTIVITY_PROBE_URL'] ||
+      'https://generativelanguage.googleapis.com';
+  }
+
+  setMockOnline(val: boolean | null): void {
+    const previous = this.isOnline;
+    this._mockOnline = val;
+    if (val !== null && val !== previous) {
+      this._isOnline = val;
+      this._lastTransition = Date.now();
+      for (const listener of this._listeners) {
+        try {
+          listener(val, previous);
+        } catch {
+          // ignore
+        }
+      }
+    }
   }
 
   get isOnline(): boolean {
+    if (this._mockOnline !== null) return this._mockOnline;
     return this._isOnline;
   }
 
@@ -70,6 +88,10 @@ export class ConnectivityMonitor {
    * Real network check — fails if network disconnected or gateway unreachable.
    */
   async checkNow(): Promise<boolean> {
+    if (this._mockOnline !== null) {
+      this._isOnline = this._mockOnline;
+      return this._isOnline;
+    }
     if (this._isChecking) return this._isOnline;
     this._isChecking = true;
 

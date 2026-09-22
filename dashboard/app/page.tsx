@@ -12,7 +12,7 @@ import {
   Play, FastForward, Settings, Lock, Cloud, HardDrive,
   AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
   Zap, Flame, ShieldAlert, Sliders, ArrowRight, Clock,
-  DollarSign, Leaf, RefreshCw, X, FileText, Check
+  DollarSign, Leaf, RefreshCw, X, FileText, Check, Copy
 } from 'lucide-react';
 
 import { Badge } from '../components/ui/Badge';
@@ -93,6 +93,7 @@ interface Subtask {
   estimated_stale_grid?: boolean | number;
   needs_reconciliation?: boolean | number;
   reconciled_carbon_kgco2eq?: number | null;
+  output?: string | null;
 }
 
 interface Task {
@@ -104,6 +105,7 @@ interface Task {
   max_total_cost_usd: number;
   max_total_carbon_kgco2eq: number;
   max_total_latency_ms: number;
+  output?: string | null;
 }
 
 interface EscalationEvent {
@@ -139,6 +141,15 @@ export default function EcoRouterApplePage() {
   // Selected subtask for Route Inspector
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectorCandidates, setInspectorCandidates] = useState<any[]>([]);
+
+  // Output expansion & copy state
+  const [expandedOutputs, setExpandedOutputs] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedReport, setCopiedReport] = useState(false);
+
+  const toggleOutput = (id: string) => {
+    setExpandedOutputs(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Input & Parameter controls
   const [customPrompt, setCustomPrompt] = useState(CONTRACT_ACME);
@@ -683,6 +694,45 @@ export default function EcoRouterApplePage() {
                         </span>
                       )}
                     </div>
+
+                    {/* Quaternary Line: Generated Output Collapsible */}
+                    {st.output && (
+                      <div className="mt-3 pt-2.5 border-t border-[#f5f5f7] ml-7">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleOutput(st.id);
+                            }}
+                            className="text-[11px] font-medium text-[#1d1d1f] hover:text-[#6e6e73] flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <span>{expandedOutputs[st.id] ? 'Hide Output' : 'View Generated Output'}</span>
+                            {expandedOutputs[st.id] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {expandedOutputs[st.id] && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(st.output || '');
+                                setCopiedId(st.id);
+                                setTimeout(() => setCopiedId(null), 2000);
+                              }}
+                              className="text-[10px] text-[#86868b] hover:text-[#1d1d1f] flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              {copiedId === st.id ? <Check className="w-2.5 h-2.5 text-emerald-600" /> : <Copy className="w-2.5 h-2.5" />}
+                              <span>{copiedId === st.id ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          )}
+                        </div>
+                        {expandedOutputs[st.id] && (
+                          <div className="p-3 bg-[#fbfbfd] border border-[#e5e5e7] rounded-xl text-xs font-mono text-[#1d1d1f] whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto mt-1">
+                            {st.output}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -784,6 +834,51 @@ export default function EcoRouterApplePage() {
               </Card>
             </div>
           </div>
+
+          {/* 2d. Final Workflow Deliverable & Report */}
+          {currentTask?.output && (
+            <div className="mb-12">
+              <div className="bg-white border border-[#e5e5e7] rounded-3xl p-6 shadow-xs">
+                <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#f5f5f7]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold tracking-tight text-[#1d1d1f]">
+                        Workflow Deliverable & Executive Report
+                      </h3>
+                      <p className="text-[11px] text-[#86868b]">
+                        Complete synthesized output across all executed subtasks
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Badge variant={subtasks.some(s => Boolean(s.degraded_routing)) ? 'subtle' : 'dark'} size="sm">
+                      {subtasks.some(s => Boolean(s.degraded_routing)) ? '⚡ Offline Executed' : '🟢 Online Verified'}
+                    </Badge>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(currentTask.output || '');
+                        setCopiedReport(true);
+                        setTimeout(() => setCopiedReport(false), 2000);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#f5f5f7] text-[#1d1d1f] border border-[#e5e5e7] hover:bg-[#e5e5e7] transition-colors cursor-pointer"
+                    >
+                      {copiedReport ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedReport ? 'Report Copied' : 'Copy Full Report'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-5 bg-[#fbfbfd] border border-[#e5e5e7] rounded-2xl text-xs font-mono text-[#1d1d1f] whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
+                  {currentTask.output}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 2e. Run Stats & Details (Progressive Disclosure) */}
           <div className="pt-6 border-t border-[#e5e5e7]">

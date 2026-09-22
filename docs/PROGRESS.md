@@ -121,4 +121,25 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 
 **Currently broken / blockers:** None.
 
+## 2026-09-22 | Session 7 — Gemini Integration & End-to-End Output Generation (Complete)
+
+**Done this session:**
+- **Model Registry & Recalibration**: Added `gemini-1.5-flash` (tier 0.78, 1200ms, $0.000075/1k, 0.00060 kgCO2eq/1k) and `gemini-1.5-pro` (tier 0.92, 3200ms, $0.00125/1k, 0.00220 kgCO2eq/1k) to `config/registry.json`. Ran `node scripts/calibrate_bounds.js` to update `config/bounds.json` per Invariant 3.
+- **Gemini Client** (`orchestrator/src/integrations/gemini-client.ts`): Built REST client for Google Generative AI API with `GEMINI_API_KEY` / `GOOGLE_API_KEY`, Vercel AI Gateway fallback, and domain synthesizer fallback when offline.
+- **Output Synthesizer & Domain Generator** (`orchestrator/src/pipeline/output-synthesizer.ts`): Produces rich, structured contract deliverables across all 5 subtask types (party extraction, clause taxonomy classification, risk analysis, obligation summary, negotiation reply email) and synthesizes an aggregate executive report for `task.output`.
+- **Ollama Client Domain Fallback** (`orchestrator/src/integrations/ollama-client.ts`): Enhanced offline fallback to produce realistic structured outputs rather than bare error strings when the local daemon is unreachable.
+- **Pipeline & Database Persistence**: Added `output` column to `tasks` table in SQLite schema with safe dynamic migration. Updated `runner.ts` to dispatch Gemini models, execute local models, and persist the synthesized `task.output`.
+- **Dashboard Output Rendering** (`dashboard/app/page.tsx`):
+  - Added collapsible "View Generated Output" / "Hide Output" viewer with copy button on each subtask card.
+  - Added "Workflow Deliverables & Executive Report" panel displaying the complete Markdown deliverable with execution policy badge (🟢 Online Verified / ⚡ Offline Executed) and "Copy Full Report" button.
+- **Testing & Verification**: Created `scripts/test-e2e-pipeline.js` validating online Gemini routing and offline degraded execution. All 23 vitest unit tests pass. `orchestrator` TypeScript compilation and `dashboard` Next.js production build (`next build`) pass with 0 errors.
+
+**Verification:**
+- `scripts/test-e2e-pipeline.js`: Online (Gemini + Local) & Offline E2E passed (exit 0)
+- `orchestrator`: `vitest run` 23/23 tests passing (100% pass)
+- `orchestrator`: `tsc --noEmit` exit 0
+- `dashboard`: `npm run build` compiled successfully (exit 0)
+
+**Currently broken / blockers:** None.
+
 

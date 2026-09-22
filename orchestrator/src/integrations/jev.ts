@@ -139,6 +139,7 @@ export class LiveJevClient implements IJevClient {
               instructions: 'Does this task require multiple distinct steps to complete?',
             },
           },
+          signal: AbortSignal.timeout(3500),
         }),
       });
 
@@ -190,6 +191,7 @@ export class LiveJevClient implements IJevClient {
             },
           },
         }),
+        signal: AbortSignal.timeout(2500),
       });
 
       if (!resp.ok) {
@@ -240,6 +242,7 @@ export class LiveJevClient implements IJevClient {
             },
           },
         }),
+        signal: AbortSignal.timeout(2500),
       });
 
       if (!resp.ok) {
