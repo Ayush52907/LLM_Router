@@ -156,3 +156,31 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
 - **Dashboard Output Rendering**: Added collapsible output viewer and deliverable report in dashboard.
 - **Testing & Verification**: Created `scripts/test-e2e-pipeline.js` validating online Gemini routing and offline degraded execution.
 
+## 2026-09-22 | Session 11 — Frontend Reliability Fixes & Servers Running (Complete)
+
+**Done this session:**
+- **Font**: Replaced Mac-only serif font stack in `globals.css` with `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`, eliminating Times New Roman fallback on Windows.
+- **Layout width**: Removed narrow `max-w-3xl` constraint and upgraded container to standard `max-w-5xl` for both header and main layout.
+- **Stale data on load**: Removed `GET /api/tasks/latest` from initial `useEffect()` on mount in `dashboard/app/page.tsx`. The interface now starts clean/empty and only renders results after a user executes a run.
+- **Forecast bar contrast**: Replaced near-invisible `bg-[#E5E4DE]` styling on simulated forecast bars with high-contrast `bg-[#7A7870] border-t-2 border-dashed border-[#3D3C38]` and readable font color (`#4A4843`).
+- **All Servers Live**:
+  - FastAPI Sidecar running on `http://localhost:8000` (PID 21292)
+  - Orchestrator running on `http://localhost:3001` (PID 17368)
+  - Next.js Dashboard running on `http://localhost:3000` (PID 8320)
+- Verified real end-to-end task execution against live backend with 36/36 tests passing and 200 OK responses across all services.
+
+## 2026-09-22 | Session 12 — Monochrome Minimalist Frontend Redesign (Complete)
+
+**Done this session:**
+- **Reverted & Polished Hackathon Dashboard**: Reset layout back to commit `66ff944` 3-column architecture (DAG Canvas, Route Inspector, and Right Mini Panels), removing the complex OTP gate and multi-page routing.
+- **Strict Black & White / Minimalist Aesthetic**:
+  - `globals.css`: Dark base `#000000` background, `#ededed` typography, refined subtle dark scrollbars, eliminated saturated accents.
+  - `page.tsx`: Replaced `#080c14` background with pure `#000000`, upgraded contract prompt drawer and time-shift modal to `#0a0a0a` / `#121212` with clean neutral accents and white controls.
+  - `HeadlinePanel.tsx`: Replaced neon colors with `#0a0a0a` cards, `#262626` borders, crisp white headline numbers, and muted tracking.
+  - `ControlsStrip.tsx`: Replaced colored toggles with minimalist monochrome pills (white active state, dark `#121212` default) and white slider accents.
+  - `DagCanvas.tsx`: Upgraded subtask cards to `#121212` with white borders on selection and monochrome status chips (`queued`, `routing`, `executing`, `done`).
+  - `RouteInspector.tsx`: Candidate cards in `#121212`, factor bars in greyscale tones (white, neutral-400, neutral-600, neutral-700, neutral-800).
+  - `RightMiniPanels.tsx`: Budget gauges in white/neutral, grid intensity card in clean greys, simulated forecast bars in grey-dashed `#404040` / `#737373` with prominent "Simulated" badge (Invariant 6).
+  - `ComparisonChart.tsx`: Restyled to `#0a0a0a`, bars in greyscale (`#525252` for always-strongest, `#383838` for random, white for this system, with distinct `#737373` scheduler overhead segment per Invariant 7).
+  - `FooterDisclosure.tsx`: Unified with `#0a0a0a` / `#262626` footer styling.
+- **Verification**: `npx tsc --noEmit` passed with 0 errors. All background servers (sidecar, orchestrator, dashboard) running.

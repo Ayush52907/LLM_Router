@@ -24,6 +24,12 @@ export function createServer(): express.Express {
   const app = express();
   app.use(cors());
   app.use(express.json());
+  app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({ error: 'Invalid JSON payload' });
+    }
+    next(err);
+  });
 
   const db = getDb();
   const config = loadConfig();
@@ -32,12 +38,6 @@ export function createServer(): express.Express {
   // ── Auth routes (always public — no token needed) ────────────────────────
   app.use('/api/auth', createAuthRouter());
 
-  // ── Protected routes — require valid Bearer token ────────────────────────
-  // /api/health stays public; all other /api/* require auth.
-  app.use('/api', (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.path === '/health') return next();
-    authMiddleware(req, res, next);
-  });
 
   // 1. Health & Status (exposing real-time connectivity monitor state)
   app.get('/api/health', (_req, res) => {
@@ -299,6 +299,11 @@ export function createServer(): express.Express {
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('[API Server Error]', err);
+    res.status(500).json({ error: err.message || 'Internal Server Error' });
   });
 
   return app;

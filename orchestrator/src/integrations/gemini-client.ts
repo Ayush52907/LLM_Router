@@ -5,6 +5,7 @@
  */
 
 import { generateDomainSubtaskOutput } from '../pipeline/output-synthesizer.js';
+import { defaultOllamaClient } from './ollama-client.js';
 
 export interface GeminiGenerateResult {
   response: string;
@@ -128,7 +129,24 @@ export class GeminiClient {
       }
     }
 
-    // 3. Realistic domain synthesis (offline, mock mode, or key unavailable)
+    // 3. Fall back to local Ollama LLM if cloud is experiencing high demand (503) or timeout
+    try {
+      const localRes = await defaultOllamaClient.generate('phi3:latest', prompt, context, 20000);
+      if (localRes.response && localRes.source === 'ollama') {
+        return {
+          response: localRes.response,
+          inputTokens: localRes.inputTokens,
+          outputTokens: localRes.outputTokens,
+          totalDurationMs: Date.now() - startTime,
+          model: 'phi3:latest (local fallback)',
+          source: 'gemini_fallback',
+        };
+      }
+    } catch {
+      // Proceed to domain synthesizer
+    }
+
+    // 4. Realistic domain synthesis (offline, mock mode, or key unavailable)
     const synthesized = generateDomainSubtaskOutput(
       model,
       context?.subtaskType ?? 'other',

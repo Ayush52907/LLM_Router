@@ -39,17 +39,17 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
   isRunning,
 }) => {
   return (
-    <div className="bg-[#0f172a]/90 border border-slate-800 rounded-xl p-3 shadow-lg flex flex-wrap items-center justify-between gap-4 text-left">
+    <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-3 shadow-sm flex flex-wrap items-center justify-between gap-3 text-left">
       {/* 1. Sliders section */}
-      <div className="flex flex-wrap items-center gap-4 flex-1">
-        <div className="flex items-center gap-1.5 text-xs font-bold uppercase text-slate-300">
-          <Sliders className="w-3.5 h-3.5 text-sky-400" />
+      <div className="flex flex-wrap items-center gap-3 flex-1">
+        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-300">
+          <Sliders className="w-3.5 h-3.5 text-neutral-400" />
           Weights:
         </div>
 
         {/* Latency */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-slate-400">Lat:</span>
+          <span className="text-neutral-400">Lat:</span>
           <input
             type="range"
             min="0"
@@ -57,14 +57,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.latency}
             onChange={(e) => onWeightChange('latency', parseFloat(e.target.value))}
-            className="w-16 accent-sky-500 cursor-pointer"
+            className="w-16 accent-white cursor-pointer"
           />
-          <span className="w-7 text-sky-400 font-bold">{weights.latency.toFixed(2)}</span>
+          <span className="text-white font-bold">{weights.latency.toFixed(2)}</span>
         </div>
 
         {/* Accuracy */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-slate-400">Acc:</span>
+          <span className="text-neutral-400">Acc:</span>
           <input
             type="range"
             min="0"
@@ -72,14 +72,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.accuracy}
             onChange={(e) => onWeightChange('accuracy', parseFloat(e.target.value))}
-            className="w-16 accent-indigo-500 cursor-pointer"
+            className="w-16 accent-white cursor-pointer"
           />
-          <span className="w-7 text-indigo-400 font-bold">{weights.accuracy.toFixed(2)}</span>
+          <span className="text-white font-bold">{weights.accuracy.toFixed(2)}</span>
         </div>
 
         {/* Cost */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-slate-400">Cost:</span>
+          <span className="text-neutral-400">Cost:</span>
           <input
             type="range"
             min="0"
@@ -87,14 +87,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.cost}
             onChange={(e) => onWeightChange('cost', parseFloat(e.target.value))}
-            className="w-16 accent-emerald-500 cursor-pointer"
+            className="w-16 accent-white cursor-pointer"
           />
-          <span className="w-7 text-emerald-400 font-bold">{weights.cost.toFixed(2)}</span>
+          <span className="text-white font-bold">{weights.cost.toFixed(2)}</span>
         </div>
 
         {/* Energy */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-slate-400">Energy:</span>
+          <span className="text-neutral-400">Energy:</span>
           <input
             type="range"
             min="0"
@@ -102,14 +102,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.energy}
             onChange={(e) => onWeightChange('energy', parseFloat(e.target.value))}
-            className="w-16 accent-amber-500 cursor-pointer"
+            className="w-16 accent-white cursor-pointer"
           />
-          <span className="w-7 text-amber-400 font-bold">{weights.energy.toFixed(2)}</span>
+          <span className="text-white font-bold">{weights.energy.toFixed(2)}</span>
         </div>
 
         {/* Carbon */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-slate-400 font-semibold text-teal-300">Carbon:</span>
+          <span className="text-neutral-400">Carbon:</span>
           <input
             type="range"
             min="0"
@@ -117,72 +117,74 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.carbon}
             onChange={(e) => onWeightChange('carbon', parseFloat(e.target.value))}
-            className="w-20 accent-teal-400 cursor-pointer"
-            title="Move to 0.50 to test T1 slider flip!"
+            className="w-16 accent-white cursor-pointer"
           />
-          <span className="w-7 text-teal-300 font-bold">{weights.carbon.toFixed(2)}</span>
+          <span className="text-white font-bold">{weights.carbon.toFixed(2)}</span>
         </div>
       </div>
 
-      {/* 2. Interactive Toggles */}
+      {/* 2. Toggles & Actions */}
       <div className="flex items-center gap-2">
-        {/* Urgent Toggle */}
+        {/* Urgent toggle */}
         <button
           onClick={onToggleUrgent}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-medium border transition-all ${
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
             isUrgent
-              ? 'bg-amber-950 text-amber-300 border-amber-600 shadow-sm shadow-amber-500/20'
-              : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800'
+              ? 'bg-white text-black border-white'
+              : 'bg-[#121212] text-neutral-400 border-[#262626] hover:text-white hover:border-neutral-500'
           }`}
+          title="Toggles w_lat=0.70 per PRD §7.1"
         >
-          <Flame className="w-3 h-3 text-amber-400" />
-          Urgent: {isUrgent ? 'ON (w_lat=0.5)' : 'OFF'}
+          <Flame className="w-3.5 h-3.5" />
+          Urgent
         </button>
 
         {/* PII Toggle */}
         <button
           onClick={onTogglePii}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-medium border transition-all ${
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
             isPiiEnabled
-              ? 'bg-emerald-950 text-emerald-300 border-emerald-600 shadow-sm shadow-emerald-500/20'
-              : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800'
+              ? 'bg-neutral-200 text-black border-neutral-300'
+              : 'bg-[#121212] text-neutral-400 border-[#262626] hover:text-white hover:border-neutral-500'
           }`}
+          title="T3 Canary PII Isolation Toggle"
         >
-          <Lock className="w-3 h-3 text-emerald-400" />
-          PII Guard: {isPiiEnabled ? 'ACTIVE' : 'OFF'}
+          <Lock className="w-3.5 h-3.5" />
+          PII Guard
         </button>
 
-        {/* Fault Injection Toggle (Guaranteed Demo Escalation) */}
+        {/* Fault Injection Toggle */}
         <button
           onClick={onToggleFaultInjection}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-medium border transition-all ${
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
             isFaultInjected
-              ? 'bg-rose-950 text-rose-300 border-rose-600 shadow-sm shadow-rose-500/20 animate-pulse'
-              : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800'
+              ? 'bg-neutral-800 text-white border-neutral-600'
+              : 'bg-[#121212] text-neutral-400 border-[#262626] hover:text-white hover:border-neutral-500'
           }`}
+          title="T5 Verification Fault Injection Toggle"
         >
-          <ShieldAlert className="w-3 h-3 text-rose-400" />
-          Fault Injection: {isFaultInjected ? 'ARMED' : 'OFF'}
+          <ShieldAlert className="w-3.5 h-3.5" />
+          Fault Test
         </button>
-      </div>
 
-      {/* 3. Action Buttons */}
-      <div className="flex items-center gap-2">
+        {/* Time-shift Batch Scenario Button */}
         <button
           onClick={onRunTimeShift}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-800/80 transition-all shadow-sm"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-[#121212] text-neutral-300 border border-[#262626] hover:border-neutral-500 hover:text-white transition-colors"
+          title="Runs Phase 7 Time-shift Scenario (200 contracts)"
         >
-          <FastForward className="w-3.5 h-3.5 text-teal-400" />
-          Time-Shift Batch (200 docs)
+          <FastForward className="w-3.5 h-3.5" />
+          Time-shift
         </button>
 
+        {/* Run Demo Task Button */}
         <button
           onClick={onRunDemoTask}
           disabled={isRunning}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-white text-black hover:bg-neutral-200 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
-          <Play className="w-3.5 h-3.5 fill-current" />
-          {isRunning ? 'Processing...' : 'Run Demo Task'}
+          <Play className="w-3.5 h-3.5 fill-black" />
+          {isRunning ? 'Executing…' : 'Run Pipeline'}
         </button>
       </div>
     </div>

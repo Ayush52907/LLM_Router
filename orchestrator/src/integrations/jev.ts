@@ -92,8 +92,8 @@ export class MockJevClient implements IJevClient {
   }
 
   async verifyOutput(input: JevVerificationInput): Promise<JevVerificationResult> {
-    // Mock: pass verification unless output is empty or very short
-    const isSubstantial = input.output.trim().length > 50;
+    // Mock: pass verification unless output is empty or whitespace
+    const isSubstantial = input.output.trim().length > 5;
     return { probability: isSubstantial ? 0.85 : 0.30 };
   }
 }

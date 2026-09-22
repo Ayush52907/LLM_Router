@@ -197,9 +197,11 @@ export function createAuthRouter(): Router {
 
     try {
       await sendOtpEmail(normalizedEmail, otp);
+      const isDevMode = !process.env['EMAIL_PASS'];
       res.json({
-        message: 'OTP sent. Check your email (or the orchestrator console in dev mode).',
-        dev_mode: !process.env['EMAIL_PASS'],
+        message: 'OTP sent. Check your email (or use the dev code below).',
+        dev_mode: isDevMode,
+        dev_otp: isDevMode ? otp : undefined,
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
