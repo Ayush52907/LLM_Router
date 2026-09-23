@@ -634,10 +634,10 @@ export default function OrbitaGptDashboard() {
         {/* Header Bar */}
         <header className="h-16 border-b border-slate-200/80 px-6 flex items-center justify-between bg-white select-none shrink-0">
           <div className="flex items-center gap-3">
-            {/* Orbita GPT Plus Badge */}
+            {/* EcoRouter Mission Control Badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-2xs">
               <div className="w-2 h-2 rounded-full bg-[#5B7EFF]" />
-              <span className="text-xs font-semibold text-slate-900 tracking-tight">Orbita GPT Plus</span>
+              <span className="text-xs font-semibold text-slate-900 tracking-tight">EcoRouter Mission Control</span>
             </div>
             <span className="text-xs text-slate-400 font-medium">EcoRouter Dispatcher</span>
           </div>
