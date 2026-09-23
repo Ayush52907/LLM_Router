@@ -8,7 +8,39 @@ import { RouteInspector } from '../components/RouteInspector';
 import { RightMiniPanels } from '../components/RightMiniPanels';
 import { ComparisonChart } from '../components/ComparisonChart';
 import { FooterDisclosure } from '../components/FooterDisclosure';
-import { X, CheckCircle2, Clock, Leaf, FileText, ChevronDown, ChevronUp, LogOut, User } from 'lucide-react';
+import {
+  X,
+  CheckCircle2,
+  Clock,
+  Leaf,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  LogOut,
+  User,
+  MessageSquare,
+  Search,
+  Plus,
+  Settings,
+  Share2,
+  Paperclip,
+  Mic,
+  Send,
+  Sparkles,
+  Calendar,
+  Bell,
+  Sliders,
+  Flame,
+  Lock,
+  ShieldAlert,
+  FastForward,
+  Layers,
+  BarChart3,
+  Bot,
+  ArrowUpRight,
+  RefreshCw,
+} from 'lucide-react';
 import { isAuthenticated, getUserEmail, logout, authFetch } from '../lib/auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:3001';
@@ -52,16 +84,17 @@ Effective Date: March 1, 2026 | Canary Token: CANARY-PII-CYBER-88124
 ## 4. DISCLAIMERS (RISK)
 4.1 Client forfeits all legal claims for patient injury or record loss caused by Vendor gross negligence.`;
 
-export default function MissionControlDashboard() {
+type ViewTab = 'dag' | 'inspector' | 'comparison' | 'budget';
+
+export default function OrbitaGptDashboard() {
   const [nodes, setNodes] = useState<DagNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [apiOnline, setApiOnline] = useState<boolean>(false);
 
   // Custom Prompt Input State
-  const [showPromptEditor, setShowPromptEditor] = useState<boolean>(false);
   const [customPrompt, setCustomPrompt] = useState<string>(PRESET_CONTRACT_1);
-
+  const [selectedSource, setSelectedSource] = useState<'contract_1' | 'contract_2' | 'custom'>('contract_1');
 
   // Controls state
   const [weights, setWeights] = useState<ScoringWeightsState>({
@@ -116,6 +149,13 @@ export default function MissionControlDashboard() {
   // Auth state & guard
   const [authChecked, setAuthChecked] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+
+  // UI Interactive States
+  const [isSavedOpen, setIsSavedOpen] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isConfigDrawerOpen, setIsConfigDrawerOpen] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<ViewTab>('dag');
+  const [isPromptExpanded, setIsPromptExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -247,7 +287,7 @@ export default function MissionControlDashboard() {
     );
   };
 
-  // 2. Live Dynamic Route Scoring (Whenever node selection or sliders change)
+  // 2. Live Dynamic Route Scoring
   const fetchDynamicScore = useCallback(
     async (nodeType: string, complexity: string, piiActive: boolean, currentWeights: ScoringWeightsState) => {
       try {
@@ -300,7 +340,6 @@ export default function MissionControlDashboard() {
     setIsRunning(true);
 
     try {
-      // 1. Submit pipeline task to backend
       const res = await authFetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -320,7 +359,6 @@ export default function MissionControlDashboard() {
       const data = await res.json();
       const taskId = data.task.id;
 
-      // 2. Poll until status is 'done' or update directly
       let completed = false;
       let attempts = 0;
 
@@ -363,268 +401,877 @@ export default function MissionControlDashboard() {
     }
   };
 
+  const handleSelectPreset = (presetKey: 'contract_1' | 'contract_2' | 'custom') => {
+    setSelectedSource(presetKey);
+    if (presetKey === 'contract_1') setCustomPrompt(PRESET_CONTRACT_1);
+    else if (presetKey === 'contract_2') setCustomPrompt(PRESET_CONTRACT_2);
+    else setCustomPrompt('');
+  };
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || nodes[0] || {
-    description: 'No active workflow loaded. Click "Run Demo Task" to submit a real contract.',
+    description: 'No active workflow loaded. Click Send or run a contract.',
     complexity: 'N/A',
     piiClass: null,
   };
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-black text-neutral-400 flex items-center justify-center font-mono text-xs">
+      <div className="min-h-screen bg-[#F8F9FB] text-slate-500 flex items-center justify-center font-sans text-xs">
         <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-white animate-ping" />
-          <span>Validating EcoRouter credentials...</span>
+          <div className="w-2.5 h-2.5 rounded-full bg-[#5B7EFF] animate-ping" />
+          <span>Connecting to Orbita GPT...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-black text-neutral-100 p-3 gap-3">
-      {/* 0. Top Navigation & User Session Bar */}
-      <header className="flex items-center justify-between px-4 py-2 rounded-xl bg-[#0a0a0a] border border-[#262626]">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm shadow-white/40 animate-pulse" />
-            <span className="font-bold text-xs tracking-wider uppercase text-white font-mono">EcoRouter</span>
-            <span className="text-neutral-600 text-xs font-mono">/</span>
-            <span className="text-xs text-neutral-400 font-medium">Mission Control</span>
+    <div className="flex h-screen bg-[#F8F9FB] text-slate-900 overflow-hidden font-sans antialiased">
+      
+      {/* ──────────────────────────────────────────────────────────────────────────
+          FAR-LEFT VERTICAL ICON BAR (~64px)
+          ────────────────────────────────────────────────────────────────────────── */}
+      <aside className="w-16 bg-white border-r border-slate-200/80 flex flex-col items-center py-4 justify-between select-none shrink-0 z-30">
+        <div className="flex flex-col items-center gap-6">
+          {/* Blue Circular Logo */}
+          <div
+            className="w-10 h-10 rounded-full bg-[#5B7EFF] flex items-center justify-center text-white shadow-md shadow-blue-500/20 cursor-pointer transition-transform hover:scale-105"
+            title="Orbita GPT"
+          >
+            <Sparkles className="w-5 h-5 fill-white" />
           </div>
-          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-medium border ${
-            apiOnline
-              ? 'bg-neutral-900 text-neutral-200 border-neutral-700'
-              : 'bg-red-950/40 text-red-400 border-red-800/40'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${apiOnline ? 'bg-emerald-400' : 'bg-red-500'}`} />
-            {apiOnline ? 'Online' : 'Offline'}
-          </span>
+
+          {/* Nav Icons */}
+          <div className="flex flex-col items-center gap-3">
+            <button
+              className="w-10 h-10 rounded-xl bg-blue-50 text-[#5B7EFF] flex items-center justify-center transition-colors"
+              title="Chat"
+            >
+              <MessageSquare className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={() => setActiveTab('dag')}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                activeTab === 'dag' ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+              }`}
+              title="Workflow Graph (DAG)"
+            >
+              <Layers className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={() => setActiveTab('comparison')}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                activeTab === 'comparison' ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+              }`}
+              title="Policy Benchmarks"
+            >
+              <BarChart3 className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={handleRunTimeShift}
+              className="w-10 h-10 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"
+              title="Time-Shift Schedule (+6h Green Valley)"
+            >
+              <Calendar className="w-5 h-5" />
+            </button>
+
+            <button
+              className="w-10 h-10 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors relative"
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              <span className="w-2 h-2 rounded-full bg-[#5B7EFF] absolute top-2.5 right-2.5 ring-2 ring-white" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#121212] border border-[#262626] text-xs">
-            <User className="w-3.5 h-3.5 text-neutral-400" />
-            <span className="text-neutral-300 font-mono text-[11px] max-w-[200px] truncate">
-              {currentUserEmail || 'operator'}
-            </span>
-          </div>
+        {/* Bottom Dock: Config, Avatar & Logout */}
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={() => setIsConfigDrawerOpen(!isConfigDrawerOpen)}
+            className="w-10 h-10 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"
+            title="Configuration"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+
           <button
             onClick={() => logout(API_BASE)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 text-xs font-medium transition-colors cursor-pointer"
-            title="Sign out of EcoRouter"
+            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors text-xs font-semibold"
+            title={`Logged in as ${currentUserEmail || 'operator'} — Click to sign out`}
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
+            {currentUserEmail ? currentUserEmail[0].toUpperCase() : 'O'}
           </button>
         </div>
-      </header>
+      </aside>
 
-      {/* 1. Top Strip: Headline Panel & Interactive Controls */}
-      <HeadlinePanel
-        costSavedPct={headlineMetrics.costSavedPct}
-        carbonSavedPct={headlineMetrics.carbonSavedPct}
-        qualityRetainedPct={headlineMetrics.qualityRetainedPct}
-        isMeasuredOffline={headlineMetrics.isMeasuredOffline}
-      />
+      {/* ──────────────────────────────────────────────────────────────────────────
+          LEFT SIDEBAR (280px)
+          ────────────────────────────────────────────────────────────────────────── */}
+      <aside className="w-[280px] bg-[#F8F9FB] border-r border-slate-200/80 flex flex-col justify-between select-none shrink-0 z-20">
+        <div className="p-4 flex flex-col gap-4 overflow-y-auto">
+          {/* Sidebar Top: Chat Label & Search */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-slate-800 tracking-tight">Chat</span>
+            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer shadow-2xs">
+              <Search className="w-3.5 h-3.5" />
+            </div>
+          </div>
 
-      <ControlsStrip
-        weights={weights}
-        onWeightChange={handleWeightChange}
-        isUrgent={isUrgent}
-        onToggleUrgent={() => setIsUrgent(!isUrgent)}
-        isPiiEnabled={isPiiEnabled}
-        onTogglePii={() => setIsPiiEnabled(!isPiiEnabled)}
-        isFaultInjected={isFaultInjected}
-        onToggleFaultInjection={() => setIsFaultInjected(!isFaultInjected)}
-        onRunDemoTask={handleRunDemoTask}
-        onRunTimeShift={handleRunTimeShift}
-        isRunning={isRunning}
-      />
+          {/* Search Input */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-[#5B7EFF] transition-colors"
+            />
+          </div>
 
-      {/* Prompt / Contract Input Drawer Toggle */}
-      <div className="bg-[#0a0a0a] border border-[#262626] rounded-lg overflow-hidden shadow-sm">
-        <button
-          onClick={() => setShowPromptEditor(!showPromptEditor)}
-          className="w-full px-4 py-2 flex items-center justify-between text-xs font-medium text-neutral-300 hover:bg-[#141414] transition-colors"
-        >
+          {/* + New Chat Pill-shaped Button */}
+          <button
+            onClick={() => {
+              setCustomPrompt('');
+              setSelectedSource('custom');
+            }}
+            className="w-full py-2.5 px-4 rounded-full bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Chat</span>
+          </button>
+
+          {/* Expandable "Saved" Section */}
+          <div className="space-y-1 pt-1">
+            <button
+              onClick={() => setIsSavedOpen(!isSavedOpen)}
+              className="w-full flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1 py-1 hover:text-slate-600"
+            >
+              <span>Saved</span>
+              {isSavedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+
+            {isSavedOpen && (
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => handleSelectPreset('contract_1')}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-2 transition-colors ${
+                    selectedSource === 'contract_1' ? 'bg-white font-medium text-slate-900 shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Bot className="w-3.5 h-3.5 text-[#5B7EFF]" />
+                  <span className="truncate">ChatAI · Acme MSA (PII)</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectPreset('contract_2')}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-2 transition-colors ${
+                    selectedSource === 'contract_2' ? 'bg-white font-medium text-slate-900 shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="truncate">Image of sun · CyberDyne</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('comparison')}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs text-slate-600 hover:bg-slate-100 flex items-center gap-2 transition-colors"
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="truncate">Data Analyst · Benchmarks</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* "Today" Section */}
+          <div className="space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1 block">Today</span>
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
+                <span className="truncate">Contract Dispatch Workflow</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              </div>
+              <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                {customPrompt.slice(0, 75)}...
+              </p>
+            </div>
+          </div>
+
+          {/* "Yesterday" Section */}
+          <div className="space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1 block">Yesterday</span>
+            <div className="space-y-0.5">
+              <div className="px-2.5 py-1.5 rounded-xl text-xs text-slate-600 hover:bg-slate-100 cursor-pointer">
+                <span className="truncate block">Clause Liability & Indemnity Audit</span>
+              </div>
+              <div className="px-2.5 py-1.5 rounded-xl text-xs text-slate-600 hover:bg-slate-100 cursor-pointer">
+                <span className="truncate block">Batch 200 Contracts (+6h valley)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar Footer Status Badge */}
+        <div className="p-3 border-t border-slate-200/80 bg-white/50 text-[11px] text-slate-500 flex items-center justify-between font-mono">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${apiOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span>{localZone}</span>
+          </div>
+          <span>{gridIntensity} gCO₂/kWh</span>
+        </div>
+      </aside>
+
+      {/* ──────────────────────────────────────────────────────────────────────────
+          MAIN CONTENT AREA
+          ────────────────────────────────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col bg-white overflow-hidden relative">
+        
+        {/* Header Bar */}
+        <header className="h-16 border-b border-slate-200/80 px-6 flex items-center justify-between bg-white select-none shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Orbita GPT Plus Badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-2xs">
+              <div className="w-2 h-2 rounded-full bg-[#5B7EFF]" />
+              <span className="text-xs font-semibold text-slate-900 tracking-tight">Orbita GPT Plus</span>
+            </div>
+            <span className="text-xs text-slate-400 font-medium">EcoRouter Dispatcher</span>
+          </div>
+
+          {/* Header Actions */}
           <div className="flex items-center gap-2">
-            <FileText className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Workflow Prompt &amp; Contract Input Document</span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#171717] text-neutral-400 border border-[#262626]">
-              ~{Math.round(customPrompt.length / 4)} tokens
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 font-mono">
-            <span>{showPromptEditor ? 'Hide Prompt Editor' : 'Click to View / Edit Custom Prompt'}</span>
-            {showPromptEditor ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </div>
-        </button>
+            <button
+              onClick={() => setIsConfigDrawerOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-500" />
+              <span>Configuration</span>
+            </button>
 
-        {showPromptEditor && (
-          <div className="p-3 border-t border-[#262626] bg-[#0d0d0d] space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-neutral-500 uppercase font-mono">Presets:</span>
+            <button
+              onClick={() => {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(window.location.href);
+                  alert('URL copied to clipboard!');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5 text-slate-500" />
+              <span>Share</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCustomPrompt('');
+                setSelectedSource('custom');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-900 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Chat</span>
+            </button>
+
+            {/* Profile & Logout button */}
+            <button
+              onClick={() => logout(API_BASE)}
+              className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-50 hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200 transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Center Chat Display Area */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          <div className="max-w-4xl mx-auto space-y-6">
+            
+            {/* If no pipeline nodes generated yet -> Render Orbita GPT Welcome Hero */}
+            {nodes.length === 0 && (
+              <div className="py-8 text-center space-y-6">
+                <div className="w-14 h-14 rounded-2xl bg-[#5B7EFF] text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-500/20">
+                  <Sparkles className="w-7 h-7 fill-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                    How can I help you today?
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto">
+                    Submit contract text to decompose into subtasks, schedule across local and cloud LLMs, and measure carbon and latency savings.
+                  </p>
+                </div>
+
+                {/* Suggested Prompt Cards (2x2 Grid) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-left max-w-2xl mx-auto pt-2">
+                  <div
+                    onClick={() => {
+                      setCustomPrompt("What are the best open opportunities by company size across our standard master service agreements?");
+                      setSelectedSource('custom');
+                    }}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#5B7EFF] hover:shadow-md transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-800 group-hover:text-[#5B7EFF]">
+                      <span>Open Opportunities Analysis</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-[#5B7EFF]" />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      "What are the best open opportunities by company size?"
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => handleSelectPreset('contract_1')}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#5B7EFF] hover:shadow-md transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-800 group-hover:text-[#5B7EFF]">
+                      <span>Acme Cloud MSA (PII Isolation)</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-[#5B7EFF]" />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Decompose 30-page agreement, extract parties, isolate canary PII, and flag uncapped liability.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => handleSelectPreset('contract_2')}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#5B7EFF] hover:shadow-md transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-800 group-hover:text-[#5B7EFF]">
+                      <span>CyberDyne Autonomous Audit</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-[#5B7EFF]" />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Audit robotic telemetry agreement and detect irrevocable 5-year auto-renewal clauses.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={handleRunTimeShift}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#5B7EFF] hover:shadow-md transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-800 group-hover:text-[#5B7EFF]">
+                      <span>Time-Shift Batch Scenario</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-[#5B7EFF]" />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Evaluate +6h green valley deferral rule for 200 archived documents.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* If task has been run or is running -> Render Conversation Flow */}
+            {nodes.length > 0 && (
+              <div className="space-y-6">
+                
+                {/* 1. User Message */}
+                <div className="flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                    U
+                  </div>
+                  <div className="flex-1 bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs text-slate-800">
+                    <div className="flex items-center justify-between font-semibold text-slate-900 mb-1.5">
+                      <span>Contract Workflow Request</span>
+                      <button
+                        onClick={() => setIsPromptExpanded(!isPromptExpanded)}
+                        className="text-[11px] text-[#5B7EFF] hover:underline cursor-pointer"
+                      >
+                        {isPromptExpanded ? 'Collapse prompt' : 'Expand full contract'}
+                      </button>
+                    </div>
+                    <p className="font-mono leading-relaxed whitespace-pre-wrap">
+                      {isPromptExpanded ? customPrompt : `${customPrompt.slice(0, 260)}...`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Orbita GPT Assistant Message */}
+                <div className="flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-full bg-[#5B7EFF] text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Sparkles className="w-4 h-4 fill-white" />
+                  </div>
+                  <div className="flex-1 space-y-4">
+                    
+                    {/* Headline Impact Summary */}
+                    <HeadlinePanel
+                      costSavedPct={headlineMetrics.costSavedPct}
+                      carbonSavedPct={headlineMetrics.carbonSavedPct}
+                      qualityRetainedPct={headlineMetrics.qualityRetainedPct}
+                      isMeasuredOffline={headlineMetrics.isMeasuredOffline}
+                    />
+
+                    {/* Interactive Workspace Navigation Tabs */}
+                    <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 text-xs">
+                      <button
+                        onClick={() => setActiveTab('dag')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg font-medium transition-all ${
+                          activeTab === 'dag' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Workflow DAG ({nodes.length} subtasks)
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('inspector')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg font-medium transition-all ${
+                          activeTab === 'inspector' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Route Inspector
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('comparison')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg font-medium transition-all ${
+                          activeTab === 'comparison' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Policy Benchmarks
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('budget')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg font-medium transition-all ${
+                          activeTab === 'budget' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Gauges &amp; Budget
+                      </button>
+                    </div>
+
+                    {/* Tab 1: Workflow DAG Nodes */}
+                    {activeTab === 'dag' && (
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                        <DagCanvas
+                          nodes={nodes}
+                          selectedNodeId={selectedNodeId}
+                          onSelectNode={(id) => {
+                            setSelectedNodeId(id);
+                            setActiveTab('inspector');
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Tab 2: Route Inspector */}
+                    {activeTab === 'inspector' && (
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                        <RouteInspector
+                          selectedNodeTitle={selectedNode.description}
+                          complexity={selectedNode.complexity}
+                          piiForced={selectedNode.piiClass === 'raw_pii'}
+                          candidates={inspectorCandidates}
+                        />
+                      </div>
+                    )}
+
+                    {/* Tab 3: Policy Comparisons */}
+                    {activeTab === 'comparison' && (
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                        <ComparisonChart
+                          alwaysStrongest={comparisonData.alwaysStrongest}
+                          randomPolicy={comparisonData.randomPolicy}
+                          thisSystem={comparisonData.thisSystem}
+                          overheadPct={0.08}
+                        />
+                      </div>
+                    )}
+
+                    {/* Tab 4: Carbon & Budget Gauges */}
+                    {activeTab === 'budget' && (
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                        <RightMiniPanels
+                          runningCost={budgets.runningCost}
+                          maxCost={budgets.maxCost}
+                          runningCarbon={budgets.runningCarbon}
+                          maxCarbon={budgets.maxCarbon}
+                          runningLatency={budgets.runningLatency}
+                          maxLatency={budgets.maxLatency}
+                          currentGridIntensity={gridIntensity}
+                          localZone={localZone}
+                          escalationEvents={escalations}
+                        />
+                      </div>
+                    )}
+
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* ──────────────────────────────────────────────────────────────────────────
+            INPUT SECTION AT BOTTOM
+            ────────────────────────────────────────────────────────────────────────── */}
+        <div className="border-t border-slate-200/80 p-4 bg-white/80 backdrop-blur-md select-none shrink-0">
+          <div className="max-w-4xl mx-auto space-y-2.5">
+            
+            {/* Input Card Container */}
+            <div className="rounded-2xl border border-slate-300/80 bg-white shadow-md p-3 focus-within:border-[#5B7EFF] focus-within:ring-2 focus-within:ring-blue-500/10 transition-all">
+              
+              {/* Top Selector: Source Dropdown & Info */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Source:</span>
+                  <select
+                    value={selectedSource}
+                    onChange={(e) => handleSelectPreset(e.target.value as any)}
+                    className="text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#5B7EFF] cursor-pointer"
+                  >
+                    <option value="contract_1">Acme Cloud MSA (Contract 1 - PII)</option>
+                    <option value="contract_2">CyberDyne Autonomous (Contract 2 - Risk)</option>
+                    <option value="custom">Custom Text / Instructions</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-slate-400">
+                    ~{Math.round(customPrompt.length / 4)} tokens
+                  </span>
+                </div>
+              </div>
+
+              {/* Main Text Input Area */}
+              <textarea
+                rows={2}
+                value={customPrompt}
+                onChange={(e) => {
+                  setCustomPrompt(e.target.value);
+                  setSelectedSource('custom');
+                }}
+                placeholder="Ask me anything or paste your contract markdown..."
+                className="w-full pt-2.5 bg-transparent text-xs text-slate-900 placeholder-slate-400 focus:outline-none resize-none font-mono"
+              />
+
+              {/* Action Toolbar */}
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center gap-1.5">
+                  {/* Attach button */}
+                  <button
+                    onClick={() => handleSelectPreset('contract_1')}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Attach contract document"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+
+                  {/* Voice button */}
+                  <button
+                    onClick={() => alert('Voice mode is simulated in local demo.')}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Voice input"
+                  >
+                    <Mic className="w-4 h-4" />
+                  </button>
+
+                  {/* Quick Toggles */}
+                  <div className="hidden sm:flex items-center gap-1 ml-2">
+                    <button
+                      onClick={() => setIsUrgent(!isUrgent)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                        isUrgent ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-500 border-slate-200'
+                      }`}
+                    >
+                      Urgent
+                    </button>
+
+                    <button
+                      onClick={() => setIsPiiEnabled(!isPiiEnabled)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                        isPiiEnabled ? 'bg-[#5B7EFF] text-white border-[#5B7EFF]' : 'bg-slate-50 text-slate-500 border-slate-200'
+                      }`}
+                    >
+                      PII Lock
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dark Pill-shaped Send button */}
                 <button
-                  onClick={() => setCustomPrompt(PRESET_CONTRACT_1)}
-                  className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171717] hover:bg-[#262626] text-neutral-300 border border-[#262626] transition-colors"
+                  onClick={handleRunDemoTask}
+                  disabled={isRunning || !customPrompt.trim()}
+                  className="py-2 px-5 rounded-full bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-2 shadow-sm transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  Acme Cloud (Contract 1)
-                </button>
-                <button
-                  onClick={() => setCustomPrompt(PRESET_CONTRACT_2)}
-                  className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171717] hover:bg-[#262626] text-neutral-300 border border-[#262626] transition-colors"
-                >
-                  CyberDyne (Contract 2)
-                </button>
-                <button
-                  onClick={() => setCustomPrompt('')}
-                  className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#171717] hover:bg-[#262626] text-neutral-400 border border-[#262626] transition-colors"
-                >
-                  Clear / Custom Prompt
+                  {isRunning ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Dispatching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Send</span>
+                      <Send className="w-3.5 h-3.5" />
+                    </>
+                  )}
                 </button>
               </div>
 
-              <span className="text-[10px] text-neutral-500 font-mono">
-                {customPrompt.length} chars · ~{Math.round(customPrompt.length / 4)} tokens
-              </span>
             </div>
 
-            <textarea
-              rows={5}
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
-              placeholder="Paste any contract markdown, prompt, or task instructions here..."
-              className="w-full bg-[#121212] border border-[#262626] rounded-md p-2.5 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors"
-            />
+            {/* Footer Disclaimer Text */}
+            <p className="text-[11px] text-slate-400 text-center font-sans">
+              Orbita GPT provides carbon- and latency-aware dispatch. Local carbon computed with CodeCarbon × live grid; cloud carbon via EcoLogits. Raw PII strictly isolated locally.
+            </p>
+
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* 2. Middle Main Grid: 40% DAG | 30% Inspector | 30% Right Mini-Panels */}
-      <div className="grid grid-cols-12 gap-3 flex-1 min-h-[420px]">
-        {/* Left 40% (approx 5 cols of 12) */}
-        <div className="col-span-5 h-full">
-          {nodes.length === 0 ? (
-            <div className="bg-[#0a0a0a] border border-[#262626] rounded-lg p-8 shadow-sm flex flex-col items-center justify-center h-full text-center">
-              <Clock className="w-8 h-8 text-neutral-500 mb-2 animate-pulse" />
-              <div className="text-sm font-semibold text-neutral-200">No active workflow loaded</div>
-              <div className="text-xs text-neutral-400 mt-1 max-w-xs font-mono">
-                Click <strong className="text-white underline underline-offset-2">Run Demo Task</strong> to submit a vendor contract through the real router pipeline.
+      </main>
+
+      {/* ──────────────────────────────────────────────────────────────────────────
+          CONFIGURATION SLIDE-OVER DRAWER
+          ────────────────────────────────────────────────────────────────────────── */}
+      {isConfigDrawerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex justify-end">
+          <div className="w-full max-w-md bg-white h-full shadow-2xl p-6 overflow-y-auto space-y-6 flex flex-col justify-between">
+            <div className="space-y-6">
+              
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-[#5B7EFF]" />
+                  <h2 className="text-base font-bold text-slate-900">Dispatcher Configuration</h2>
+                </div>
+                <button
+                  onClick={() => setIsConfigDrawerOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
+
+              {/* Scoring Weights Sliders */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Five-Factor Scoring Weights
+                </h3>
+                
+                {/* Latency */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-slate-700">Latency Weight (w_lat)</span>
+                    <span className="font-mono font-bold text-slate-900">{weights.latency.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={weights.latency}
+                    onChange={(e) => handleWeightChange('latency', parseFloat(e.target.value))}
+                    className="w-full accent-[#5B7EFF] cursor-pointer"
+                  />
+                </div>
+
+                {/* Accuracy */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-slate-700">Accuracy Tier Weight (w_acc)</span>
+                    <span className="font-mono font-bold text-slate-900">{weights.accuracy.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={weights.accuracy}
+                    onChange={(e) => handleWeightChange('accuracy', parseFloat(e.target.value))}
+                    className="w-full accent-[#5B7EFF] cursor-pointer"
+                  />
+                </div>
+
+                {/* Cost */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-slate-700">Cost Weight (w_cost)</span>
+                    <span className="font-mono font-bold text-slate-900">{weights.cost.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={weights.cost}
+                    onChange={(e) => handleWeightChange('cost', parseFloat(e.target.value))}
+                    className="w-full accent-[#5B7EFF] cursor-pointer"
+                  />
+                </div>
+
+                {/* Energy */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-slate-700">Energy Weight (w_energy)</span>
+                    <span className="font-mono font-bold text-slate-900">{weights.energy.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={weights.energy}
+                    onChange={(e) => handleWeightChange('energy', parseFloat(e.target.value))}
+                    className="w-full accent-[#5B7EFF] cursor-pointer"
+                  />
+                </div>
+
+                {/* Carbon */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-slate-700">Carbon Weight (w_carbon)</span>
+                    <span className="font-mono font-bold text-slate-900">{weights.carbon.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={weights.carbon}
+                    onChange={(e) => handleWeightChange('carbon', parseFloat(e.target.value))}
+                    className="w-full accent-[#5B7EFF] cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Toggles & Modes */}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Execution Modes
+                </h3>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-800 block">Urgent Mode</span>
+                    <span className="text-[11px] text-slate-500">Overrides w_lat to 0.70</span>
+                  </div>
+                  <button
+                    onClick={() => setIsUrgent(!isUrgent)}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${
+                      isUrgent ? 'bg-amber-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                      isUrgent ? 'right-1' : 'left-1'
+                    }`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-800 block">PII Isolation Lock</span>
+                    <span className="text-[11px] text-slate-500">Forces local models on sensitive subtasks</span>
+                  </div>
+                  <button
+                    onClick={() => setIsPiiEnabled(!isPiiEnabled)}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${
+                      isPiiEnabled ? 'bg-[#5B7EFF]' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                      isPiiEnabled ? 'right-1' : 'left-1'
+                    }`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-800 block">Fault Injection (T5)</span>
+                    <span className="text-[11px] text-slate-500">Tests verification escalation loop</span>
+                  </div>
+                  <button
+                    onClick={() => setIsFaultInjected(!isFaultInjected)}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${
+                      isFaultInjected ? 'bg-red-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                      isFaultInjected ? 'right-1' : 'left-1'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+
             </div>
-          ) : (
-            <DagCanvas
-              nodes={nodes}
-              selectedNodeId={selectedNodeId}
-              onSelectNode={(id) => setSelectedNodeId(id)}
-            />
-          )}
+
+            <button
+              onClick={() => setIsConfigDrawerOpen(false)}
+              className="w-full py-2.5 rounded-full bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
+            >
+              Done
+            </button>
+          </div>
         </div>
+      )}
 
-        {/* Center 30% (approx 4 cols of 12) */}
-        <div className="col-span-4 h-full">
-          <RouteInspector
-            selectedNodeTitle={selectedNode.description}
-            complexity={selectedNode.complexity}
-            piiForced={selectedNode.piiClass === 'raw_pii'}
-            candidates={inspectorCandidates}
-          />
-        </div>
-
-        {/* Right 30% (approx 3 cols of 12) */}
-        <div className="col-span-3 h-full">
-          <RightMiniPanels
-            runningCost={budgets.runningCost}
-            maxCost={budgets.maxCost}
-            runningCarbon={budgets.runningCarbon}
-            maxCarbon={budgets.maxCarbon}
-            runningLatency={budgets.runningLatency}
-            maxLatency={budgets.maxLatency}
-            currentGridIntensity={gridIntensity}
-            localZone={localZone}
-            escalationEvents={escalations}
-          />
-        </div>
-      </div>
-
-      {/* 3. Bottom Strip: Policy Comparison Chart */}
-      <ComparisonChart
-        alwaysStrongest={comparisonData.alwaysStrongest}
-        randomPolicy={comparisonData.randomPolicy}
-        thisSystem={comparisonData.thisSystem}
-        overheadPct={0.08}
-      />
-
-      {/* 4. Persistent Footer Disclosure */}
-      <FooterDisclosure />
-
-      {/* Time-Shift Batch Result Modal */}
+      {/* ──────────────────────────────────────────────────────────────────────────
+          TIME-SHIFT BATCH MODAL
+          ────────────────────────────────────────────────────────────────────────── */}
       {timeShiftModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl max-w-md w-full p-5 shadow-2xl text-left">
-            <div className="flex items-center justify-between border-b border-[#262626] pb-3 mb-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl text-left space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <Leaf className="w-4 h-4 text-white" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-200">
-                  Time-Shift Batch Dispatcher (PRD Addendum F)
+                <Leaf className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Time-Shift Batch Dispatcher
                 </h3>
               </div>
               <button
                 onClick={() => setTimeShiftModal(null)}
-                className="text-neutral-400 hover:text-white transition-colors"
+                className="text-slate-400 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs font-mono">
-              <div className="bg-[#121212] p-2.5 rounded border border-[#262626]">
-                <span className="text-neutral-500 block text-[10px] uppercase">Scenario</span>
-                <span className="text-neutral-200 font-semibold">{timeShiftModal.scenario}</span>
+            <div className="space-y-3 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Scenario</span>
+                <span className="text-slate-900 font-semibold">{timeShiftModal.scenario}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-[#121212] p-2 rounded border border-[#262626]">
-                  <span className="text-neutral-500 block text-[10px]">Intensity Now</span>
-                  <span className="text-neutral-300 font-semibold">{timeShiftModal.intensity_now_gco2} gCO₂/kWh</span>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                  <span className="text-slate-400 block text-[10px]">Intensity Now</span>
+                  <span className="text-slate-800 font-bold">{timeShiftModal.intensity_now_gco2} gCO₂/kWh</span>
                 </div>
-                <div className="bg-[#121212] p-2 rounded border border-[#262626]">
-                  <span className="text-neutral-500 block text-[10px]">Forecast Valley (+3h)</span>
-                  <span className="text-white font-semibold">{timeShiftModal.min_forecast_intensity_gco2} gCO₂/kWh</span>
+                <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-100">
+                  <span className="text-blue-500 block text-[10px] font-semibold">Valley (+3h)</span>
+                  <span className="text-[#5B7EFF] font-bold">{timeShiftModal.min_forecast_intensity_gco2} gCO₂/kWh</span>
                 </div>
               </div>
 
-              <div className="bg-[#121212] p-2.5 rounded border border-[#262626] flex items-center justify-between">
-                <span className="text-neutral-400">Threshold Check:</span>
-                <span className="text-white font-medium">
-                  {timeShiftModal.difference_pct}% difference &gt; {timeShiftModal.threshold_pct}% threshold
-                </span>
-              </div>
-
-              <div className="bg-[#141414] border border-[#333333] p-3 rounded-lg text-neutral-200">
-                <div className="flex items-center gap-2 font-semibold mb-1 text-white">
-                  <CheckCircle2 className="w-4 h-4 text-white" />
+              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-950">
+                <div className="flex items-center gap-2 font-semibold mb-1 text-emerald-900">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   Action: {timeShiftModal.action}
                 </div>
-                <div className="text-[11px] text-neutral-400 space-y-1">
-                  <p>• Scheduled for: <strong className="text-neutral-200">+{timeShiftModal.scheduled_for_offset_hours} hours offset</strong> (Valley window)</p>
-                  <p>• Projected carbon saved: <strong className="text-neutral-200">{timeShiftModal.carbon_savings_projected_pct}%</strong></p>
-                  <p>• Rule: <strong className="text-neutral-200">{timeShiftModal.eligible_candidates}</strong></p>
-                  <p>• Clock simulation: <strong className="text-neutral-200">{timeShiftModal.clock_mode}</strong></p>
+                <div className="text-[11px] text-emerald-800 space-y-1">
+                  <p>• Scheduled for: <strong>+{timeShiftModal.scheduled_for_offset_hours}h green window</strong></p>
+                  <p>• Projected carbon saved: <strong>{timeShiftModal.carbon_savings_projected_pct}%</strong></p>
+                  <p>• Rule: {timeShiftModal.eligible_candidates}</p>
                 </div>
               </div>
             </div>
 
             <button
               onClick={() => setTimeShiftModal(null)}
-              className="mt-4 w-full py-2 bg-white hover:bg-neutral-200 text-black font-semibold text-xs rounded-md transition-colors"
+              className="w-full py-2.5 bg-[#0F172A] hover:bg-slate-800 text-white font-semibold text-xs rounded-full transition-colors"
             >
               Close Inspector
             </button>
           </div>
         </div>
       )}
+
     </div>
   );
 }

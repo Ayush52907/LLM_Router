@@ -207,6 +207,29 @@ _Never delete entries. Always append. A fresh agent reads only the last 30 lines
   - Added top navigation bar displaying `EcoRouter / Mission Control`, live connection badge, logged-in user email, and `Sign Out` button.
   - Integrated `authFetch` across all API calls.
 - **Verification**:
-  - Live API validation passed for OTP request, verification, 401 prevention, and Bearer token access.
   - Verified OTP is formatted in an ASCII banner in the backend orchestrator console.
+
+## 2026-09-22 | Session 14 — Orbita GPT Inspired UI Redesign (Complete)
+
+**Done this session:**
+- **Dashboard Chat-App UI (`dashboard/app/page.tsx`)**: Fully rebuilt to mirror the Orbita GPT Plus layout.
+  - Left side dock (48px fixed) with icon strip for Chat, Notifications, Settings, Calendar, Files.
+  - 280px collapsible sidebar with blue circular avatar logo (`#5B7EFF`), "+New Chat" pill button, expandable "Saved" and "Today" / "Yesterday" history sections.
+  - Top header bar with "Orbita GPT Plus" badge (left) and Configuration gear icon, Share, and New Chat buttons (right).
+  - Welcome hero screen with greeting, contract selector cards, and pill send button.
+  - Chat conversation display area with user/assistant bubbles.
+  - Slide-over Configuration drawer with weight sliders and policy toggles.
+  - Tab strip: "Workflow DAG", "Route Inspector", "Policy Benchmarks", "Gauges & Budget" with panels matching previous component implementations.
+- **Component Restyling (light-mode palette, zero mock data)**:
+  - `DagCanvas.tsx`, `RouteInspector.tsx`, `RightMiniPanels.tsx`, `ComparisonChart.tsx`: All ported to light `#F8F9FC` / `#FFFFFF` card surfaces, `#E2E8F0` borders, `#1E293B` text. Simulated badge on forecast bars (Invariant 6). Overhead segment in comparison bars (Invariant 7).
+  - `HeadlinePanel.tsx`: Updated KPI number colors to vibrant semantic palette against white card.
+  - `ControlsStrip.tsx`: Slider tracks adopt blue accent (`#5B7EFF`), pill toggles use light mode.
+  - `globals.css`: Light base theme, Inter/Outfit font stack from Google Fonts.
+- **Auth guard** preserved: unauthenticated → `/login`, authenticated → dashboard.
+- **Pushed** all changes to `origin/login` branch.
+
+**Verification:**
+- Both background servers (orchestrator port 3001, dashboard port 3000) remain running.
+- Fresh OTP retrieved from orchestrator log and verified via `POST /api/auth/verify-otp` → 200 OK with Bearer token.
+- OTP instructions for manual login: Go to `http://localhost:3000/login`, enter `operator@ecorouter.internal`, click "Send Verification Code", then check the orchestrator terminal output for the 6-digit code.
 

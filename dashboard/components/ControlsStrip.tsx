@@ -39,17 +39,17 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
   isRunning,
 }) => {
   return (
-    <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-3 shadow-sm flex flex-wrap items-center justify-between gap-3 text-left">
+    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 text-left">
       {/* 1. Sliders section */}
-      <div className="flex flex-wrap items-center gap-3 flex-1">
-        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-300">
-          <Sliders className="w-3.5 h-3.5 text-neutral-400" />
-          Weights:
+      <div className="flex flex-wrap items-center gap-4 flex-1">
+        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-700">
+          <Sliders className="w-3.5 h-3.5 text-[#5B7EFF]" />
+          Scoring Weights:
         </div>
 
         {/* Latency */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-neutral-400">Lat:</span>
+          <span className="text-slate-500">Lat:</span>
           <input
             type="range"
             min="0"
@@ -57,14 +57,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.latency}
             onChange={(e) => onWeightChange('latency', parseFloat(e.target.value))}
-            className="w-16 accent-white cursor-pointer"
+            className="w-16 accent-[#5B7EFF] cursor-pointer"
           />
-          <span className="text-white font-bold">{weights.latency.toFixed(2)}</span>
+          <span className="text-slate-900 font-bold">{weights.latency.toFixed(2)}</span>
         </div>
 
         {/* Accuracy */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-neutral-400">Acc:</span>
+          <span className="text-slate-500">Acc:</span>
           <input
             type="range"
             min="0"
@@ -72,14 +72,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.accuracy}
             onChange={(e) => onWeightChange('accuracy', parseFloat(e.target.value))}
-            className="w-16 accent-white cursor-pointer"
+            className="w-16 accent-[#5B7EFF] cursor-pointer"
           />
-          <span className="text-white font-bold">{weights.accuracy.toFixed(2)}</span>
+          <span className="text-slate-900 font-bold">{weights.accuracy.toFixed(2)}</span>
         </div>
 
         {/* Cost */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-neutral-400">Cost:</span>
+          <span className="text-slate-500">Cost:</span>
           <input
             type="range"
             min="0"
@@ -87,14 +87,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.cost}
             onChange={(e) => onWeightChange('cost', parseFloat(e.target.value))}
-            className="w-16 accent-white cursor-pointer"
+            className="w-16 accent-[#5B7EFF] cursor-pointer"
           />
-          <span className="text-white font-bold">{weights.cost.toFixed(2)}</span>
+          <span className="text-slate-900 font-bold">{weights.cost.toFixed(2)}</span>
         </div>
 
         {/* Energy */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-neutral-400">Energy:</span>
+          <span className="text-slate-500">Energy:</span>
           <input
             type="range"
             min="0"
@@ -102,14 +102,14 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.energy}
             onChange={(e) => onWeightChange('energy', parseFloat(e.target.value))}
-            className="w-16 accent-white cursor-pointer"
+            className="w-16 accent-[#5B7EFF] cursor-pointer"
           />
-          <span className="text-white font-bold">{weights.energy.toFixed(2)}</span>
+          <span className="text-slate-900 font-bold">{weights.energy.toFixed(2)}</span>
         </div>
 
         {/* Carbon */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-neutral-400">Carbon:</span>
+          <span className="text-slate-500">Carbon:</span>
           <input
             type="range"
             min="0"
@@ -117,9 +117,9 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
             step="0.05"
             value={weights.carbon}
             onChange={(e) => onWeightChange('carbon', parseFloat(e.target.value))}
-            className="w-16 accent-white cursor-pointer"
+            className="w-16 accent-[#5B7EFF] cursor-pointer"
           />
-          <span className="text-white font-bold">{weights.carbon.toFixed(2)}</span>
+          <span className="text-slate-900 font-bold">{weights.carbon.toFixed(2)}</span>
         </div>
       </div>
 
@@ -128,10 +128,10 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
         {/* Urgent toggle */}
         <button
           onClick={onToggleUrgent}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
+          className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
             isUrgent
-              ? 'bg-white text-black border-white'
-              : 'bg-[#121212] text-neutral-400 border-[#262626] hover:text-white hover:border-neutral-500'
+              ? 'bg-amber-500 text-white border-amber-500'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
           }`}
           title="Toggles w_lat=0.70 per PRD §7.1"
         >
@@ -142,10 +142,10 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
         {/* PII Toggle */}
         <button
           onClick={onTogglePii}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
+          className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
             isPiiEnabled
-              ? 'bg-neutral-200 text-black border-neutral-300'
-              : 'bg-[#121212] text-neutral-400 border-[#262626] hover:text-white hover:border-neutral-500'
+              ? 'bg-[#5B7EFF] text-white border-[#5B7EFF]'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
           }`}
           title="T3 Canary PII Isolation Toggle"
         >
@@ -156,10 +156,10 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
         {/* Fault Injection Toggle */}
         <button
           onClick={onToggleFaultInjection}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${
+          className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
             isFaultInjected
-              ? 'bg-neutral-800 text-white border-neutral-600'
-              : 'bg-[#121212] text-neutral-400 border-[#262626] hover:text-white hover:border-neutral-500'
+              ? 'bg-red-500 text-white border-red-500'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
           }`}
           title="T5 Verification Fault Injection Toggle"
         >
@@ -170,10 +170,10 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
         {/* Time-shift Batch Scenario Button */}
         <button
           onClick={onRunTimeShift}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-[#121212] text-neutral-300 border border-[#262626] hover:border-neutral-500 hover:text-white transition-colors"
+          className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 transition-colors"
           title="Runs Phase 7 Time-shift Scenario (200 contracts)"
         >
-          <FastForward className="w-3.5 h-3.5" />
+          <FastForward className="w-3.5 h-3.5 text-[#5B7EFF]" />
           Time-shift
         </button>
 
@@ -181,9 +181,9 @@ export const ControlsStrip: React.FC<ControlsStripProps> = ({
         <button
           onClick={onRunDemoTask}
           disabled={isRunning}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-white text-black hover:bg-neutral-200 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-[#0F172A] text-white hover:bg-slate-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
         >
-          <Play className="w-3.5 h-3.5 fill-black" />
+          <Play className="w-3.5 h-3.5 fill-white" />
           {isRunning ? 'Executing…' : 'Run Pipeline'}
         </button>
       </div>
